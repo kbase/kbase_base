@@ -141,7 +141,8 @@ RUN \
         cpanm -i Config::IniFiles && \
         ln -s /kb/deployment/deployment.cfg /root/cluster.ini.docker && \
         ln -s /root/scripts/config_mysql /root/config/setup_mysql &&\
-        ln -s /root/config/config_Workspace /root/config/postprocess_Workspace
+        ln -s /root/scripts/config_mongo /root/config/setup_mongo &&\
+        ln -s /root/scripts/config_Workspace /root/config/postprocess_Workspace
 
 WORKDIR /root/
 
