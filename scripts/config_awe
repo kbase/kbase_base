@@ -7,7 +7,7 @@ use strict;
 my $section='awe';
 my $cfg = Config::IniFiles->new( -file => "/kb/deployment/deployment.cfg" );
 my $acfg;
-for my $p ( $cfg->Parameters($section){
+for my $p ( $cfg->Parameters($section)){
   $acfg->{$p}=$cfg->val($section,$p);
 }
 
@@ -59,7 +59,7 @@ sub fix_configjs {
   my $js=shift;
 # Fix up config.js in the site area
 #
-  mysystem("/bin/cp $js $js.orig");
+  system("/bin/cp $js $js.orig");
   open(JSO, "$js.orig") or die "Unable to open $js.orig";
   open(JSN, "> $js");
   while(<JSO>){

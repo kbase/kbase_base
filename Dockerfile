@@ -1,7 +1,6 @@
-# Dockerfile that builds a minimal container for IPython + narrative
+# Dockerfile that builds the base KBase image
 #
-# Copyright 2013 The Regents of the University of California,
-# Lawrence Berkeley National Laboratory
+#Copyright (c) 2015 The KBase Project and its Contributors
 # United States Department of Energy
 # The DOE Systems Biology Knowledgebase (KBase)
 # Made available under the KBase Open Source License
@@ -134,17 +133,24 @@ RUN \
         git clone --recurse-submodules https://github.com/kbase/narrative -b docker;\ 
         rm -rf /kb/dev_container/modules/ui-common/.git /kb/dev_container/modules/narrative/.git
 
-# Additions
-RUN \
-        cpanm -i Config::IniFiles
-
 ADD ./scripts /root/scripts
-ADD ./narrative.nginx /root/narrative.nginx
+ADD ./config /root/config
+# Additions
+# - link is for backwards compatibility
+RUN \
+        cpanm -i Config::IniFiles && \
+        ln -s /kb/deployment/deployment.cfg /root/cluster.ini.docker && \
+        ln -s /root/scripts/config_mysql /root/config/setup_mysql &&\
+        ln -s /root/config/config_Workspace /root/config/postprocess_Workspace
+
 WORKDIR /root/
 
 ONBUILD ENV USER root
 
+# Eventually move away from cluster.ini
+ONBUILD ADD cluster.ini /root/deployment.cfg
 ONBUILD ADD ssl /root/ssl
+ONBUILD RUN ln -s /root/deployment.cfg /root/cluster.ini
 
 # Add the ssl certs into the certificate tree
 ONBUILD RUN cat ssl/proxy.crt  >> /etc/ssl/certs/ca-certificates.crt && \
@@ -161,16 +167,16 @@ ONBUILD RUN cat ssl/proxy.crt  >> /etc/ssl/certs/ca-certificates.crt && \
 # - Run postporcess for shock and awe
 # - Clones special versions of ui-common and narrative
 
-ONBUILD RUN cp ./deployment.cfg /kb/deployment/deployment.cfg;\
-        cd /kb/dev_container/;. ./user-env.sh;\
+ONBUILD RUN cp ./deployment.cfg /kb/deployment/deployment.cfg && \
+        cd /kb/dev_container/ && . ./user-env.sh && \
         sed -i 's/10000/256/' /kb/deployment/services/workspace/start_service && \
         sed -i 's/15000/384/' /kb/deployment/services/workspace/start_service && \
         sed -i 's/--Xms 1000 --Xmx 2000/--Xms 384 --Xmx 512/' /kb/deployment/services/*/start_service && \
-        ./scripts/postprocess_shock;\
-        ./scripts/postprocess_awe;\
-        sed -i 's/ssl_verify = True/ssl_verify = False/' /kb/deployment/lib/biokbase/Transform/script_utils.py;\
-        MYSERVICES=Transform ./scripts/postprocess_Transform;\
-        [ -e /mnt/Shock/logs ] || mkdir -p /mnt/Shock/logs;
+        /root/scripts/config_shock && \
+        /root/scripts/config_awe && \
+        sed -i 's/ssl_verify = True/ssl_verify = False/' /kb/deployment/lib/biokbase/Transform/script_utils.py && \
+        /root/scripts/config_Transform && \
+        [ -e /mnt/Shock/logs ] || mkdir -p /mnt/Shock/logs
 
 # Fix up URLs in clients
 ONBUILD RUN PUBLIC=$(grep baseurl= deployment.cfg|sed 's/baseurl=//'|sed 's/:.*//') && \

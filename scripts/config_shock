@@ -4,10 +4,10 @@ use Config::IniFiles;
 use strict;
 
 # Read config
-my $section='awe';
+my $section='shock';
 my $cfg = Config::IniFiles->new( -file => "/kb/deployment/deployment.cfg" );
 my $scfg;
-for my $p ( $cfg->Parameters($section){
+for my $p ( $cfg->Parameters($section)){
   $scfg->{$p}=$cfg->val($section,$p);
 }
 

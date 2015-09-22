@@ -7,7 +7,7 @@ my $KB_DEPLOY="/kb/deployment";
 my $service="Transform";
 
 
-my $cfg=new Config::IniFiles( -file => $KB_DEPLOY."/deployment.cfg") or die "Unable to open $file".$Config::IniFiles::errors[0];
+my $cfg=new Config::IniFiles( -file => $KB_DEPLOY."/deployment.cfg") or die "Unable to open config file".$Config::IniFiles::errors[0];
 
 # Fix up config
 my $file=$KB_DEPLOY."/services/$service/service.cfg";
@@ -35,7 +35,6 @@ foreach my $key (@keys)
 	$mcfg->setval($service,$key,$cfg->val($service,$key)) or die "unable to set $key";
 }
 
-warn "Updating $file";
 $mcfg->WriteConfig($file) or die "Unable to write $file";
 
 # workaround for handle service missing init file

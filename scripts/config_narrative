@@ -35,9 +35,9 @@ if (defined $cfg->{global}->{'basename'}){
 $baseconfig='prod' if $baseconfig=~/prod/;
 
 my $nginxcfg="/etc/nginx/sites-available/default";
-system('sed -i \'s/narrative.kbase.us/'.$narr_host.'/\' '."/root/narrative.nginx");
+system('sed -i \'s/narrative.kbase.us/'.$narr_host.'/\' '."/root/config/narrative.nginx");
 # copy nginx file (assumes file is owned by current user (jenkins for CI env))
-system("cp /root/narrative.nginx $nginxcfg");
+system("cp /root/config/narrative.nginx $nginxcfg");
 # todo: how to restart nginx as non-root?  add user to nginx group?
 
 chdir "$UI";

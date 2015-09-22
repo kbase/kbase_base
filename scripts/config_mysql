@@ -61,7 +61,7 @@ for my $s ($cfg->Sections()){
 open(L,"ls *.sql config/*.sql 2>/dev/null|");
 while (<L>){
   chomp;
-  mysystem("cat $_|mysql $adminhost $adminpass");
+  system("cat $_|mysql $adminhost $adminpass");
 }
 close L;
 
