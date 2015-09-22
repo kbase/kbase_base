@@ -1,0 +1,5 @@
+#!/bin/sh
+
+cd /tmp 
+curl ftp://dtn.chicago.kbase.us/mongo/workspace_types-20150714.tar.gz|tar xzf -
+mongorestore --host mongo --db wstypes ./workspace_types/

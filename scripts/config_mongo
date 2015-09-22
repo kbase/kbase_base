@@ -1,0 +1,47 @@
+#!/usr/bin/env perl
+
+use Config::IniFiles;
+use strict;
+
+# Read config
+my $cfg = Config::IniFiles->new( -file => "/kb/deployment/deployment.cfg" );
+
+my $host='mongo/local';
+
+if (defined $ENV{'MONGO_HOST'}){
+  $host="$ENV{'MONGO_HOST'}/local";
+}
+
+
+# Create Accounts for each service that uses mongo
+#
+for my $s ($cfg->Sections()){
+  my $mh=$cfg->val($s,'mongodb-host');
+  my $mu=$cfg->val($s,'mongodb-user');
+  my $mp=$cfg->val($s,'mongodb-pwd');
+  my $md=$cfg->val($s,'mongodb-database');
+  my $rem;
+  if (defined $mh){
+    if ($mh=~/mongodb:/){
+       #Format: mongodb://user:pwd@host/db
+       $_=$mh;
+       s/mongodb:\/\///;
+       ($mu,$mp,$mh,$md,$rem)=split /[:@\/]/,$_,5;
+       die "Unable to parse URI $_\nusername and password cannot contain a :,@ or /\n" if defined $rem;
+       #($mp,$_)=split /@/,$_,2;
+       #($mh,$md)=split /\//,$_,2;
+    }
+    else{
+    }
+    adduser($md,$mu,$mp, "[\"readWrite\", \"dbAdmin\"]");
+  }
+}
+
+# Done
+
+sub adduser {
+  my ($db,$user,$pwd,$roles)=@_;
+  my $com="use $db;\ndb.addUser( { user: \"$user\", pwd: \"$pwd\", roles: $roles })\n";
+  system("echo '$com'|mongo $host|grep -v 'exists'|grep -v bye|grep -v connecting|grep -v shell");
+}
+

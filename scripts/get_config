@@ -1,0 +1,64 @@
+#!/usr/bin/env perl
+
+use Config::IniFiles;
+use strict;
+
+my $file=$ARGV[0];
+my $service=$ARGV[1];
+my $param=$ARGV[2];
+
+# Read config
+my $cfg=read_config($file);
+
+exit 1 if (! defined $cfg->{$service}->{$param});
+print $cfg->{$service}->{$param}."\n";
+
+sub read_config {
+   my $file=shift;
+
+   my $mcfg=new Config::IniFiles( -file => $file) or die "Unable to open $file".$Config::IniFiles::errors[0];
+
+   # Reset things
+   my $cfg;
+   $cfg->{global}->{type}='global';
+   $cfg->{defaults}->{type}='defaults';
+   my $global=$cfg->{global};
+   my $defaults=$cfg->{defaults};
+   $global->{repobase}="undefined";
+   $global->{basename}="bogus";
+   $global->{hashfile}="githashes";
+   $global->{runtime}="/usr";
+   $global->{'make-options'}='DEPLOY_RUNTIME=$KB_RUNTIME ANT_HOME=$KB_RUNTIME/ant';
+   $global->{'default-modules'}="kbapi_common,typecomp,jars,auth";
+   $defaults->{'setup'}='setup_service';
+   $defaults->{'auto-deploy-target'}='deploy';
+   $defaults->{'git-branch'}='master';
+   $defaults->{'test-args'}='test';
+
+   # Read global and default first
+   for my $section ('global','defaults'){
+       foreach ($mcfg->Parameters($section)){
+         $cfg->{$section}->{$_}=$mcfg->val($section,$_);
+       }
+   }
+   # Trim off trailing slash to avoid bogus mismatches
+   $global->{repobase}=~s/\/$//;
+   
+   
+   for my $section ($mcfg->Sections()){
+     next if ($section eq 'global' || $section eq 'defaults');
+     # Populate default values
+     for my $p (keys %{$defaults}){
+       $cfg->{$section}->{$p}=$defaults->{$p};
+     }
+     $cfg->{$section}->{urlname}=$section;
+     $cfg->{$section}->{basedir}=$section;
+     $cfg->{$section}->{alias}=$global->{basename}.'-'.$section;
+
+     # Now override or add with defined values
+     foreach ($mcfg->Parameters($section)){
+       $cfg->{$section}->{$_}=$mcfg->val($section,$_);
+     }
+   }
+   return $cfg;
+}

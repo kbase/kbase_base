@@ -1,0 +1,43 @@
+#!/usr/bin/env perl
+
+use Config::IniFiles;
+use strict;
+
+my $KB_DEPLOY="/kb/deployment";
+my $service="Transform";
+
+
+my $cfg=new Config::IniFiles( -file => $KB_DEPLOY."/deployment.cfg") or die "Unable to open $file".$Config::IniFiles::errors[0];
+
+# Fix up config
+my $file=$KB_DEPLOY."/services/$service/service.cfg";
+my $mcfg=new Config::IniFiles( -file => $file) or die "Unable to open $file".$Config::IniFiles::errors[0];
+
+# need to populate appropriate stanzas in service.cfg from $cfg
+my @keys = qw(
+log_syslog
+log_file
+log_level
+awe_service_url
+ujs_service_url
+workspace_service_url
+shock_service_url
+handle_service_url
+working_directory
+plugins_directory
+awe_url
+ujs_url
+clientgroups
+);
+
+foreach my $key (@keys)
+{
+	$mcfg->setval($service,$key,$cfg->val($service,$key)) or die "unable to set $key";
+}
+
+warn "Updating $file";
+$mcfg->WriteConfig($file) or die "Unable to write $file";
+
+# workaround for handle service missing init file
+system("touch $KB_DEPLOY/lib/biokbase/AbstractHandle/__init__.py");
+

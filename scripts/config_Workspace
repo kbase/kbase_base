@@ -1,0 +1,27 @@
+#!/usr/bin/env perl
+
+use Config::IniFiles;
+use strict;
+use MongoDB;
+
+# Read config
+my $section='Workspace';
+my $cfg = Config::IniFiles->new( -file => "/kb/deployment/deployment.cfg" );
+my $acfg;
+for my $p ( $cfg->Parameters($section){
+  $mcfg->{$p}=$cfg->val($section,$p);
+}
+
+my $client     = MongoDB::MongoClient->new(host => $mcfg->{'mongodb-host'}, port => 27017);
+$client->authenticate($mcfg->{'mongodb-database'},$mcfg->{'mongodb-user'},$mcfg->{'mongodb-pwd'});
+my $database   = $client->get_database( $mcfg->{'mongodb-database'} );
+my $collection = $database->get_collection( 'settings' );
+
+my $settings={};
+
+$settings->{'type_db'}='wstypes';
+$settings->{'backend'}='shock';
+$settings->{'shock_location'}=$mcfg->{'shock-url'};
+$settings->{'shock_user'}=$mcfg->{'shock-user'};
+$collection->update({}, $settings, {'upsert'=>1});
+$collection->find_one();

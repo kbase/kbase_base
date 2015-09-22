@@ -1,0 +1,115 @@
+#!/usr/bin/perl
+
+use Config::IniFiles;
+use strict;
+
+my $debug=1;
+
+# Read config
+my $cfg = Config::IniFiles->new( -file => "/kb/deployment/deployment.cfg" );
+
+my $adminhost='';
+my $adminpass='--user root';
+
+if (defined $cfg->val('mysql','adminhost')){
+  $adminhost='--host='.$cfg->val('mysql','adminhost');
+};
+if (defined $cfg->val('mysql','adminpass')){
+  $adminpass='--password='.$cfg->val('mysql','adminpass');
+};
+
+my %userexist;
+my %dbexist;
+
+waitforserver();
+getusers();
+getdbs();
+
+#
+# Create accounts
+for my $s ($cfg->Sections()){
+  if (defined $cfg->val($s,'data-source')){
+    print "Adding mysql user for $s\n" if $debug;
+    my @tmp;
+    @tmp=split /:/,$cfg->val($s,'data-source');
+    my $dbuser=$cfg->val($s,'mysql-user');
+    my $dbpass=$cfg->val($s,'mysql-pass');
+    my $dbdb=$tmp[2];
+    my $perm=$cfg->val($s,'mysql-perm');
+    add_user($dbuser,$dbpass,$dbdb,$perm);
+  }
+  elsif (defined $cfg->val($s,'userData')){  # cdmi
+    print "Adding mysql user for $s\n" if $debug;
+    my @tmp;
+    @tmp=split /\//,$cfg->val($s,'userData');
+    my $dbuser=$tmp[0];
+    my $dbpass=$tmp[1];
+    my $dbdb=$cfg->val($s,'dbName');
+    my $perm=$cfg->val($s,'mysql-perm');
+    add_user($dbuser,$dbpass,$dbdb,$perm);
+  }
+  elsif (defined $cfg->val($s,'dbname')){  # translation
+    print "Adding mysql user for $s\n" if $debug;
+    my $dbuser=$cfg->val($s,'user');
+    my $dbpass=$cfg->val($s,'pass');
+    my $dbdb=$cfg->val($s,'dbname');
+    my $perm=$cfg->val($s,'mysql-perm');
+    add_user($dbuser,$dbpass,$dbdb,$perm);
+  }
+}
+
+open(L,"ls *.sql config/*.sql 2>/dev/null|");
+while (<L>){
+  chomp;
+  mysystem("cat $_|mysql $adminhost $adminpass");
+}
+close L;
+
+sub getusers {
+  open(U,"echo 'select User from user'|mysql $adminhost $adminpass mysql|");
+  while(<U>){
+    chomp;
+    $userexist{$_}=1;
+  }
+}
+
+sub getdbs {
+  open(U,"echo 'show DATABASES'|mysql $adminhost $adminpass mysql|");
+  while(<U>){
+    chomp;
+    $dbexist{$_}=1;
+  }
+}
+
+sub add_user {
+  my $user=shift;
+  my $pass=shift;
+  my $db=shift;
+  my $perm=shift;
+
+  my $mycom;
+  $perm='SELECT' if (! defined $perm);
+  open(MY,"|mysql $adminhost $adminpass");
+  printf MY "CREATE USER '%s'\@'%%' IDENTIFIED BY '%s';\n",$user,$pass unless $userexist{$user};
+  $userexist{$user}=1;
+  printf MY "CREATE DATABASE %s;\n",$db unless $dbexist{$db};
+  $dbexist{$db}=1;
+  printf MY "GRANT %s ON %s.* TO '%s'\@'%%';\n",$perm,$db,$user;
+  close MY;
+}
+
+
+sub waitforserver {
+  my $avail = 0;
+  print "Waiting for mysql server to become available.\n";
+  while(!$avail) {
+    $avail = 1;
+    open(U,"echo 'show databases'|mysql $adminhost $adminpass mysql 2>&1 1>/dev/null |");
+    while(my $line=<U>) {
+      if($line =~ /ERROR/) {
+        sleep(5);
+        $avail = 0;
+      }
+    }
+  }
+}

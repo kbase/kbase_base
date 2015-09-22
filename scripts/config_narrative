@@ -1,0 +1,123 @@
+#!/usr/bin/env perl
+
+use Config::IniFiles;
+use strict;
+
+# This is the name for now, as this is what the Lua provisioner looks for to fire up a Narrative.
+my $NAR_NAME="kbase/narrative";
+
+my $cfg=read_config('/kb/deployment/deployment.cfg');
+
+my $DC=$cfg->{'global'}->{devcontainer};
+my $DEPLOY=$cfg->{'global'}->{deploydir};
+my $nar=$DC."/modules/narrative";
+
+my $UI=$DC."/modules/ui-common";
+
+my $scfg=$cfg->{narrative};
+my $narr_host=$scfg->{'service-url'};
+$narr_host=~s/http.*\/\///;
+$narr_host=~s/[\/]+//;
+# base URL for references to other services
+my $base_url=$cfg->{global}->{'baseurl'};
+$base_url=~s/http.*\/\///;
+$base_url=~s/\///;
+my $awe=$scfg->{'awe-url'};
+my $njs=$scfg->{'njs-url'};
+my $njsw=$scfg->{'njsw-url'};
+my $njp=$scfg->{'njp-url'};
+my $trans=$scfg->{'transform-url'};
+my $wsid=$scfg->{'example-wsid'};
+my $baseconfig='prod';
+if (defined $cfg->{global}->{'basename'}){
+  $baseconfig=$cfg->{global}->{'basename'};
+}
+$baseconfig='prod' if $baseconfig=~/prod/;
+
+my $nginxcfg="/etc/nginx/sites-available/default";
+system('sed -i \'s/narrative.kbase.us/'.$narr_host.'/\' '."/root/narrative.nginx");
+# copy nginx file (assumes file is owned by current user (jenkins for CI env))
+system("cp /root/narrative.nginx $nginxcfg");
+# todo: how to restart nginx as non-root?  add user to nginx group?
+
+chdir "$UI";
+print "Deploying ui-common\n";
+system("./deployFunctionalSite.sh > /dev/null");
+
+# Copy lua files
+if ( ! -e "$DEPLOY/services/narrative" ){
+  mkdir "$DEPLOY/services/narrative" or die "Unable to create directory";
+}
+if ( ! -e "$DEPLOY/services/narrative/docker" ){
+  mkdir "$DEPLOY/services/narrative/docker" or die "Unable to create directory";
+}
+system("cp -r $nar/docker/*.lua $nar/docker/resty/ $DEPLOY/services/narrative/docker/");
+
+
+# TODO:  abstract out this recursive grep and sed into a perl function
+#
+# Replace kbase.us/serices with new url
+print "Replacing kbase in ui-common with $base_url\n";
+system('grep -rl //kbase.us/services /kb/deployment/ui-common 2>/dev/null|xargs sed -i "s|//kbase.us/services|//' . $base_url . '/services|g" || echo "skip"');
+
+# Samething for www.kbase.us
+print "Replace www.kbase.us with $base_url\n";
+system('grep -rl //www.kbase.us/services /kb/deployment/ui-common 2>/dev/null|xargs sed -i "s|//www.kbase.us/services|//' . $base_url . '/services|g" || echo "skip"');
+
+# Now for the search url
+# this should already be fixed
+
+# Now for the narrative url
+print "Replacing narrative in ui-common\n";
+system('grep -rl narrative.kbase.us /kb/deployment/ui-common 2>/dev/null|xargs sed -i "s|narrative.kbase.us|'.$narr_host.'|" || echo "skip"');
+
+
+sub read_config {
+   my $file=shift;
+
+   my $mcfg=new Config::IniFiles( -file => $file) or die "Unable to open $file".$Config::IniFiles::errors[0];
+
+   # Reset things
+   my $cfg;
+   $cfg->{global}->{type}='global';
+   $cfg->{defaults}->{type}='defaults';
+   my $global=$cfg->{global};
+   my $defaults=$cfg->{defaults};
+   $global->{repobase}="undefined";
+   $global->{basename}="bogus";
+   $global->{hashfile}="githashes";
+   $global->{runtime}="/usr";
+   $global->{'make-options'}='DEPLOY_RUNTIME=$KB_RUNTIME ANT_HOME=$KB_RUNTIME/ant';
+   $global->{'default-modules'}="kbapi_common,typecomp,jars,auth";
+   $defaults->{'setup'}='setup_service';
+   $defaults->{'auto-deploy-target'}='deploy';
+   $defaults->{'git-branch'}='master';
+   $defaults->{'test-args'}='test';
+
+   # Read global and default first
+   for my $section ('global','defaults'){
+       foreach ($mcfg->Parameters($section)){
+         $cfg->{$section}->{$_}=$mcfg->val($section,$_);
+       }
+   }
+   # Trim off trailing slash to avoid bogus mismatches
+   $global->{repobase}=~s/\/$//;
+   
+   
+   for my $section ($mcfg->Sections()){
+     next if ($section eq 'global' || $section eq 'defaults');
+     # Populate default values
+     for my $p (keys %{$defaults}){
+       $cfg->{$section}->{$p}=$defaults->{$p};
+     }
+     $cfg->{$section}->{urlname}=$section;
+     $cfg->{$section}->{basedir}=$section;
+     $cfg->{$section}->{alias}=$global->{basename}.'-'.$section;
+
+     # Now override or add with defined values
+     foreach ($mcfg->Parameters($section)){
+       $cfg->{$section}->{$_}=$mcfg->val($section,$_);
+     }
+   }
+   return $cfg;
+}
