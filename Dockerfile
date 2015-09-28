@@ -59,24 +59,25 @@ RUN cd /kb && \
      git clone --recursive https://github.com/kbase/kbapi_common && \
      git clone --recursive https://github.com/kbase/typecomp && \
      git clone --recursive https://github.com/kbase/jars && \
-     git clone --recursive https://github.com/kbase/auth && \
+     git clone --recursive https://github.com/kbase/auth -b develop && \
      git clone --recursive https://github.com/kbase/kbrest_common && \
+     git clone --recursive https://github.com/kbase/kb_sdk -b develop && \
      cd /kb/dev_container && \
      ./bootstrap /kb/runtime && \
      . ./user-env.sh && make && make deploy
 
 
 RUN cd /kb/dev_container/modules && \
-     git clone --recursive https://github.com/kbase/handle_service && \
-     git clone --recursive https://github.com/kbase/kb_model_seed && \
+     git clone --recursive https://github.com/kbase/handle_service -b development && \
+     git clone --recursive https://github.com/kbase/kb_model_seed -b dev && \
      git clone --recursive https://github.com/kbase/kmer_annotation_figfam && \
-     git clone --recursive https://github.com/kbase/narrative_method_store && \
+     git clone --recursive https://github.com/kbase/narrative_method_store -b develop && \
      git clone --recursive https://github.com/kbase/ontology_service && \
      git clone --recursive https://github.com/kbase/matR && \
      git clone --recursive https://github.com/kbase/protein_structure_service && \
      git clone --recursive https://github.com/kbase/erdb_service && \
-     git clone --recursive https://github.com/kbase/narrative_job_service && \
-     git clone --recursive https://github.com/kbase/KBaseFBAModeling && \
+     git clone --recursive https://github.com/kbase/narrative_job_service -b develop && \
+     git clone --recursive https://github.com/kbase/KBaseFBAModeling -b dev && \
      git clone --recursive https://github.com/kbase/handle_mngr && \
      git clone --recursive https://github.com/kbase/idserver && \
      git clone --recursive https://github.com/kbase/meme && \
@@ -84,23 +85,26 @@ RUN cd /kb/dev_container/modules && \
      git clone --recursive https://github.com/kbase/strep_repeats && \
      git clone --recursive https://github.com/kbase/njs_wrapper && \
      git clone --recursive https://github.com/kbase/shock_service && \
-     git clone --recursive https://github.com/kbase/trees && \
+     git clone --recursive https://github.com/kbase/trees -b develop && \
+     mv trees/data /kb/deployment/services/trees/ && \
+     mkdir trees/data && \
      git clone --recursive https://github.com/kbase/expression && \
      git clone --recursive https://github.com/kbase/auth_service && \
-     git clone --recursive https://github.com/kbase/workspace_deluxe && \
+     git clone --recursive https://github.com/kbase/workspace_deluxe -b dev && \
      git clone --recursive https://github.com/kbase/awe_service && \
      git clone --recursive https://github.com/kbase/search && \
      git clone --recursive https://github.com/kbase/protein_info_service && \
-     git clone --recursive https://github.com/kbase/transform && \
+     git clone --recursive https://github.com/kbase/transform -b develop && \
+     rm -rf transform/t && \
      git clone --recursive https://github.com/kbase/uploader && \
      git clone --recursive https://github.com/kbase/gwas && \
      git clone --recursive https://github.com/kbase/kb_seed && \
-     git clone --recursive https://github.com/kbase/coexpression && \
+     git clone --recursive https://github.com/kbase/coexpression -b develop && \
      git clone --recursive https://github.com/kbase/java_type_generator && \
      git clone --recursive https://github.com/kbase/m5nr && \
      git clone --recursive https://github.com/kbase/genome_comparison && \
      git clone --recursive https://github.com/kbase/user_profile && \
-     git clone --recursive https://github.com/kbase/communities_api && \
+     git clone --recursive https://github.com/kbase/communities_api -b develop && \
      git clone --recursive https://github.com/kbase/user_and_job_state && \
      git clone --recursive https://github.com/kbase/networks && \
      git clone --recursive https://github.com/kbase/genome_annotation && \
@@ -108,7 +112,9 @@ RUN cd /kb/dev_container/modules && \
      git clone --recursive https://github.com/kbase/cbd && \
      git clone --recursive https://github.com/kbase/kbwf_common && \
      git clone --recursive https://github.com/kbase/probabilistic_annotation && \
-     git clone --recursive https://github.com/kbase/mgrast_pipeline && \
+     git clone --recursive https://github.com/kbase/mgrast_pipeline -b develop && \
+     git clone --recursive https://github.com/kbase/genome_util -b develop && \
+     git clone --recursive https://github.com/kbase/feature_values -b develop && \
      find /kb/dev_container/modules -iname ".git" | grep -v communities_api | grep -v m5nr | xargs rm -rf 
 
 ADD autodeploy.cfg /kb/dev_container/autodeploy.cfg
@@ -129,8 +135,8 @@ RUN \
 
 RUN \
         cd /kb/dev_container/modules;\
-        git clone --recursive https://github.com/kbase/ui-common -b staging;\
-        git clone --recurse-submodules https://github.com/kbase/narrative -b docker;\ 
+        git clone --recursive https://github.com/kbase/ui-common -b develop && \
+        git clone --recurse-submodules https://github.com/kbase/narrative -b docker && \
         rm -rf /kb/dev_container/modules/ui-common/.git /kb/dev_container/modules/narrative/.git
 
 ADD ./scripts /root/scripts
@@ -140,9 +146,10 @@ ADD ./config /root/config
 RUN \
         cpanm -i Config::IniFiles && \
         ln -s /kb/deployment/deployment.cfg /root/cluster.ini.docker && \
-        ln -s /root/scripts/config_mysql /root/config/setup_mysql &&\
-        ln -s /root/scripts/config_mongo /root/config/setup_mongo &&\
-        ln -s /root/scripts/config_Workspace /root/config/postprocess_Workspace
+        ln -s /root/scripts/config_mysql /root/config/setup_mysql && \
+        ln -s /root/scripts/config_mongo /root/config/setup_mongo && \
+        ln -s /root/scripts/config_Workspace /root/config/postprocess_Workspace && \
+        ln -s /root/scripts/config_aweworker /root/config/postprocess_aweworker
 
 WORKDIR /root/
 

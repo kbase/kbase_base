@@ -1,0 +1,94 @@
+#!/usr/bin/env perl
+
+use Config::IniFiles;
+use strict;
+
+# Read config
+my $section='aweworker';
+my $cfg = Config::IniFiles->new( -file => "/kb/deployment/deployment.cfg" );
+my $acfg;
+for my $p ( $cfg->Parameters($section)){
+  $acfg->{$p}=$cfg->val($section,$p);
+}
+
+my $file="/kb/deployment/services/awe_service/conf/awec.cfg";
+
+# We should know what service to run.  This is
+# just a safety measure in case it gets run on the wrong host.
+my $KB_DEPLOY=$cfg->val('global','deploydir');
+my $KB_DC=$cfg->val('global','devcontainer');
+my $base_url=$cfg->val('global','baseurl');
+$base_url=~s/http.*\/\///;
+$base_url=~s/\///;
+
+my $baseworkdir="/mnt/awe";
+
+# Fix up config
+my $file=$KB_DEPLOY."/services/awe_service/conf/awec.cfg";
+my $mcfg=new Config::IniFiles( -file => $file) or die "Unable to open $file".$Config::IniFiles::errors[0];
+
+$mcfg->newval('Client','group','replace') or die "Unable to set group";
+$mcfg->newval('Client','clientgroup_token',$acfg->{'token'}) or die "Unable to set token";
+$mcfg->newval('Client','clientgroup_token',"replace");
+$mcfg->newval('Client','serverurl',$acfg->{'serverurl'}) or die "Unable to set serverurl";
+$mcfg->setval('Client','supported_apps','*');
+$mcfg->setval('Client','name','hostname');
+
+my @aweGroups;
+foreach my $token (split /,/,$acfg->{'tokens'}){
+  my @l=split /[=|]/,$token;
+  my $group=$l[1];
+  push @aweGroups,$group;
+  $mcfg->setval('Client','group',$group);
+  $mcfg->setval('Client','clientgroup_token',$token);
+  $mcfg->setval('Client','workpath', $baseworkdir . '/' . $group . '/work');
+  $mcfg->setval('Directories','data',$baseworkdir . '/' . $group . '/data');
+  $mcfg->setval('Directories','logs',$baseworkdir . '/' . $group . '/logs');
+  my $out=$file;
+    $out=~s/cfg$//;
+    $out.="$group.cfg";
+  print "Updating $out\n";
+  $mcfg->WriteConfig($out) or die "Unable to write $file";
+}
+
+foreach my $action ('start','stop')
+{
+  my $script=<<EOF;
+#!/bin/bash
+for worker in @aweGroups
+do
+    $KB_DEPLOY/services/awe_service/${action}_aweclient \$worker
+done
+EOF
+
+  my $scriptfile="$KB_DEPLOY/services/awe_service/${action}_service";
+  open (SCRIPT, '>', $scriptfile) or die "couldn't open $scriptfile: $!";
+  print SCRIPT $script;
+  close SCRIPT;
+
+  system("perl -pi -e 's|^PID_FILE=.*|PID_FILE=$baseworkdir/client\\\$suffix.pid|;' $KB_DEPLOY/services/awe_service/${action}_aweclient");
+  system("perl -pi -e 's|^AWE_DIR=.*|AWE_DIR=$baseworkdir|;' $KB_DEPLOY/services/awe_service/${action}_aweclient");
+}
+
+# May not be needed anymore.  Check.
+system("sed -i 's|//kbase.us/|//".$base_url."/|' $KB_DEPLOY/plbin/njs*");
+system("sed -i 's|//tutorial.theseed.org|//".$base_url."/|' $KB_DEPLOY/plbin/njs*");
+system("touch $KB_DEPLOY/lib/biokbase/AbstractHandle/__init__.py");
+
+# Get assembly scripts
+# TODO: remove this hack
+if ( ! -e "$KB_DEPLOY/bin/assemble_contigset_from_reads") {
+  system("cp $KB_DC/modules/kb_test/methods/scripts/assemble_contigset_from_reads/*pl $KB_DEPLOY/plbin/");
+  system("ln -s $KB_DEPLOY/plbin/assemble_contigset_from_reads.pl $KB_DEPLOY/bin/assemble_contigset_from_reads");
+  system("ln -s $KB_DEPLOY/plbin/fasta_to_contigset.pl $KB_DEPLOY/bin/fasta_to_contigset");
+  system("sed  -i 's/\.pl//' $KB_DEPLOY/bin/assemble_contigset_from_reads");
+  system("sed  -i 's/\\..fasta_to_contigset/fasta_to_contigset/' $KB_DEPLOY/bin/assemble_contigset_from_reads");
+}
+
+# TODO
+#
+# export AUTH='Authorization: OAuth $TOK
+#
+#curl -X POST -H "$AUTH" http://<awe>:7107/cgroup/next
+#
+# Grab output and stuff in config

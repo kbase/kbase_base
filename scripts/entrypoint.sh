@@ -43,7 +43,7 @@ elif [ "$MYSERVICES" = "aweworker" ] ; then
   curl -s -X POST -H "$AUTH" ${URL}/cgroup/$CGROUP > /dev/null
   TOK=$(curl -s -H "$AUTH" ${URL}/cgroup/|python -mjson.tool|sed 's/ /\n/'|grep $CGROUP|grep token|sed 's/.*name=/name=/'|sed 's/"//')
   sed -i "s/replacetoken/$TOK/" $CONFIG
-  ./scripts/postprocess_aweworker
+  ./scripts/config_aweworker
   sed -i 's/\/kb\/runtime\/sbin\/daemonize.*PID_FILE//' /kb/deployment/services/awe_service/start_*
   . /kb/deployment/user-env.sh 
   cd /kb/deployment/services/awe_service
@@ -86,6 +86,7 @@ else
   # TODO: Make it work for multiple services
   BASEDIR=$(./scripts/get_config $CONFIG $MYSERVICES basedir)
   cd /kb/deployment/services/$BASEDIR
+  . /kb/deployment/user-env.sh
   ./start_service
   L=$(ls /kb/deployment//services/*/*/*/*/server.log)
   [ ! -z $L ] && tail -n 1000 -f $L
