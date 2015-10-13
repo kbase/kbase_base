@@ -52,6 +52,10 @@ RUN cpanm -i REST::Client && cpanm -i Time::ParseDate && \
     ./glpk_build.sh /kb/runtime/
 
 
+# Bogus file to trigger a git clone and rebuild
+ADD build.trigger /tmp/
+RUN ( echo "Git clone";date) > /tmp/git.log
+
 # Clone the base repos
 RUN cd /kb && \
      git clone https://github.com/kbase/dev_container && \
@@ -83,7 +87,7 @@ RUN cd /kb/dev_container/modules && \
      git clone --recursive https://github.com/kbase/meme && \
      git clone --recursive https://github.com/kbase/translation && \
      git clone --recursive https://github.com/kbase/strep_repeats && \
-     git clone --recursive https://github.com/kbase/njs_wrapper && \
+     git clone --recursive https://github.com/kbase/njs_wrapper -b develop && \
      git clone --recursive https://github.com/kbase/shock_service && \
      git clone --recursive https://github.com/kbase/trees -b develop && \
      mv trees/data /kb/deployment/services/trees/ && \
