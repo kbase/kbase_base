@@ -7,8 +7,8 @@ use MongoDB;
 # Read config
 my $section='Workspace';
 my $cfg = Config::IniFiles->new( -file => "/kb/deployment/deployment.cfg" );
-my $acfg;
-for my $p ( $cfg->Parameters($section){
+my $mcfg;
+for my $p ( $cfg->Parameters($section) ){
   $mcfg->{$p}=$cfg->val($section,$p);
 }
 
