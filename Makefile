@@ -1,4 +1,4 @@
-IMAGE=kbase/deplbase:latest
+IMAGE=kbase/deplbase:develop
 
 
 all:

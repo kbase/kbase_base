@@ -107,7 +107,7 @@ RUN cd /kb/dev_container/modules && \
      git clone --recursive https://github.com/kbase/java_type_generator && \
      git clone --recursive https://github.com/kbase/m5nr && \
      git clone --recursive https://github.com/kbase/genome_comparison && \
-     git clone --recursive https://github.com/kbase/user_profile && \
+     git clone --recursive https://github.com/kbase/user_profile -b develop && \
      git clone --recursive https://github.com/kbase/communities_api -b develop && \
      git clone --recursive https://github.com/kbase/user_and_job_state && \
      git clone --recursive https://github.com/kbase/networks && \
@@ -165,11 +165,11 @@ ONBUILD ADD ssl /root/ssl
 ONBUILD RUN ln -s /root/deployment.cfg /root/cluster.ini
 
 # Add the ssl certs into the certificate tree
-ONBUILD RUN cat ssl/proxy.crt  >> /etc/ssl/certs/ca-certificates.crt && \
+ONBUILD RUN ( [ ! -e ssl/proxy.crt ] || ( cat ssl/proxy.crt  >> /etc/ssl/certs/ca-certificates.crt && \
     cat ssl/proxy.crt > /etc/ssl/certs/`openssl x509 -noout -hash -in ssl/proxy.crt`.0 && \
-    cat ssl/proxy.crt  >> /usr/local/lib/python2.7/dist-packages/requests/cacert.pem && \
-    cat ssl/narrative.crt  >> /etc/ssl/certs/ca-certificates.crt && \
-    cat ssl/narrative.crt > /etc/ssl/certs/`openssl x509 -noout -hash -in ssl/narrative.crt`.0
+    cat ssl/proxy.crt  >> /usr/local/lib/python2.7/dist-packages/requests/cacert.pem ) ) && \
+    ( [ ! -e ssl/narrative.crt ] || ( cat ssl/narrative.crt  >> /etc/ssl/certs/ca-certificates.crt && \
+    cat ssl/narrative.crt > /etc/ssl/certs/`openssl x509 -noout -hash -in ssl/narrative.crt`.0 ) )
 
 
 # This run command does several things including:
