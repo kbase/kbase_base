@@ -153,6 +153,7 @@ RUN \
         ln -s /root/scripts/config_mysql /root/config/setup_mysql && \
         ln -s /root/scripts/config_mongo /root/config/setup_mongo && \
         ln -s /root/scripts/config_Workspace /root/config/postprocess_Workspace && \
+        ln -s /root/scripts/config_Workspace /root/scripts/setup_Workspace && \
         ln -s /root/scripts/config_aweworker /root/config/postprocess_aweworker
 
 WORKDIR /root/
