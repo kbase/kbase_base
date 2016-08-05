@@ -2,34 +2,47 @@
 
 CONFIG=/kb/deployment/deployment.cfg
 
+# Config container
+/kb/scripts/config
+
 if [ $# -gt 0 ] ; then
-  export MYSERVICES=$1
+  export MYSERVICES="$1"
   shift
 fi
 
 if [ "$MYSERVICES" = "www" ] ; then
   echo "www"
   mkdir /etc/nginx/ssl
-  cp ./ssl/proxy.crt /etc/nginx/ssl/server.crt
-  cp ./ssl/proxy.key /etc/nginx/ssl/server.key.insecure
+  if [ -e /config/ssl/proxy.crt ] ; then
+    cp ./ssl/proxy.crt /etc/nginx/ssl/server.crt
+    cp ./ssl/proxy.key /etc/nginx/ssl/server.key.insecure
+  fi
   /etc/init.d/nginx start
   sleep 10000000000
 elif [ "$MYSERVICES" = "narrative" ] ; then
   echo "narrative"
-  SKIPNAR=1 ./scripts/config_narrative 
+  if [ -e /config/nginx.conf ] ; then
+    cp /config/nginx.conf /etc/nginx/nginx.conf
+  fi
   # Use production auth since redeployed auth is broken
-  grep -rl authorization /kb/deployment/ui-common|xargs sed -i 's/\/\/[^/]*\/services\/authorization/\/\/kbase.us\/services\/authorization/'
+  if [ ! -z $PRODAUTH ] ; then
+    grep -rl authorization /kb/deployment/ui-common|xargs sed -i 's/\/\/[^/]*\/services\/authorization/\/\/kbase.us\/services\/authorization/'
+  fi
+
   # Dial back number of narratives
   sed -i 's/M.provision_count = 20/M.provision_count = 2/' /kb/deployment/services/narrative/docker/proxy_mgr.lua 
   sed -i 's/VolumesFrom = "",/VolumesFrom = json.util.null,/' /kb/deployment/services/narrative/docker/docker.lua
   # Certs
   mkdir /etc/nginx/ssl
-  cp ./ssl/narrative.crt /etc/nginx/ssl/server.chained.crt
-  cp ./ssl/narrative.key /etc/nginx/ssl/server.key
+  if [ -e /config/ssl/narrative.crt ] ; then
+    cp /config/ssl/narrative.crt /etc/nginx/ssl/server.chained.crt
+    cp /config/ssl/narrative.key /etc/nginx/ssl/server.key
+  fi
+  # Fix docker socket group
   GID=$(ls -n /var/run/docker.sock |awk '{print $4}')
   cat /etc/group|awk -F: '{if ($3=='$GID'){print "groupdel "$1}}'|sh
   groupmod -g $GID docker || groupadd -g $GID docker
-  sed -i 's/user www-data;/user www-data docker;\ndaemon off;\nerror_log \/dev\/stdout info;/' /etc/nginx/nginx.conf
+  #sed -i 's/user www-data;/user www-data docker;\ndaemon off;\nerror_log \/dev\/stdout info;/' /etc/nginx/nginx.conf
   /usr/sbin/nginx
 elif [ "$MYSERVICES" = "aweworker" ] ; then
   CGROUP=$1
@@ -83,12 +96,15 @@ else
   [ -e /mnt/Shock/site ] || mkdir /mnt/Shock/site
   [ -e /mnt/Shock/logs ] || mkdir /mnt/Shock/logs
   [ -e /mnt/transform_working ] || mkdir /mnt/transform_working
+  rm -f /kb/deployment/services/*/service.pid
   # TODO: Make it work for multiple services
   BASEDIR=$(./scripts/get_config $CONFIG $MYSERVICES basedir)
+  echo "Starting: Service:$MYSERVICES BASE:$BASEDIR"
+  [ -z $BASEDIR ] && BASEDIR=$MYSERVICES
   cd /kb/deployment/services/$BASEDIR
   . /kb/deployment/user-env.sh
   ./start_service
-  L=$(ls /kb/deployment//services/*/*/*/*/server.log)
+  L=$(ls /kb/deployment//services/*/*/*/*/server.log 2>/dev/null)
   [ ! -z $L ] && tail -n 1000 -f $L
 fi
 

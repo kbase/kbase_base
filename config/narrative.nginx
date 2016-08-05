@@ -63,7 +63,7 @@ server {
 	return       301 https://narrative.kbase.us$request_uri;
 
 	location / {
-		root /kb/deployment/ui-common;
+		root /kb/deployment/services/kbase-ui;
 		index index.html;
 		#ssi on;
 		ssi_silent_errors off;
@@ -233,7 +233,7 @@ server {
         server_name   localhost;
 
 	location / {
-		root /kb/deployment/ui-common;
+		root /kb/deployment/services/kbase-ui;
 		index index.html;
 		#ssi on;
 		ssi_silent_errors off;

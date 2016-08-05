@@ -8,29 +8,34 @@
 FROM kbase/runtime:latest
 MAINTAINER Shane Canon scanon@lbl.gov
 
-#RUN DEBIAN_FRONTEND=noninteractive apt-get update;apt-get -y upgrade;apt-get install -y \
-#	mercurial bzr gfortran subversion tcsh cvs mysql-client libgd2-dev tcl-dev tk-dev \
-#	libtiff-dev libpng12-dev libpng-dev libjpeg-dev libgd2-xpm-dev libxml2-dev \
-#	libwxgtk2.8-dev libdb5.1-dev libgsl0-dev libxslt1-dev libfreetype6-dev libreadline-dev \
-#	libpango1.0-dev libx11-dev libxt-dev libcairo2-dev zlib1g-dev libgtk2.0-dev python-dev \
-#	libmysqlclient-dev libmysqld-dev libssl-dev libpq-dev libexpat1-dev libzmq-dev libbz2-dev \
-#	libncurses5-dev libcurl4-gnutls-dev uuid-dev git wget uuid-dev build-essential curl \
-#	libsqlite3-dev libffi-dev
-RUN apt-get update
+RUN \
+   apt-get update && \
+   DEBIAN_FRONTEND=noninteractive apt-get upgrade -y && \
+   DEBIAN_FRONTEND=noninteractive apt-get install -y \
+        python-pip libcurl4-gnutls-dev python-dev ncurses-dev software-properties-common
 
-RUN DEBIAN_FRONTEND=noninteractive apt-get install -y \
-         python-pip libcurl4-gnutls-dev python-dev ncurses-dev software-properties-common
 
-RUN echo ''|add-apt-repository ppa:nginx/stable; apt-get update; apt-get install -y nginx nginx-extras
+# Split here just to manage the layer sizes
+RUN \
+   echo ''|add-apt-repository ppa:nginx/stable && \
+   apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv 7F0CEB10 && \
+   echo 'deb http://downloads-distro.mongodb.org/repo/ubuntu-upstart dist 10gen' \
+          > /etc/apt/sources.list.d/mongodb.list && \
+   curl -sL https://deb.nodesource.com/setup_4.x | bash && \
+   DEBIAN_FRONTEND=noninteractive apt-get install -y \
+     lua5.1 luarocks liblua5.1-0 liblua5.1-0-dev liblua5.1-json liblua5.1-lpeg2 \
+     nginx nginx-extras nodejs \
+     mongodb-10gen=2.4.14 apt-transport-https && \
+   npm install -g grunt-cli && \
+   apt-key adv --keyserver hkp://p80.pool.sks-keyservers.net:80 --recv-keys 58118E89F3A912897C070ADBF76221572C52609D && \
+   echo "deb https://apt.dockerproject.org/repo ubuntu-trusty main" >> /etc/apt/sources.list.d/docker.list && \
+   apt-get update && apt-get install -y docker-engine=1.7.1-0~trusty && \
+   pip install --upgrade sphinx && \
+   pip install docker-py gitpython pyyaml \
+       pyopenssl ndg-httpsclient pyasn1 && \
+   sed -i 's/not cert.get..subjectAltName., .../False/' /usr/local/lib/python2.7/dist-packages/requests/packages/urllib3/connection.py && \
+   cpanm -i Config::IniFiles
 
-RUN DEBIAN_FRONTEND=noninteractive apt-get install -y \
-         lua5.1 luarocks liblua5.1-0 liblua5.1-0-dev liblua5.1-json liblua5.1-lpeg2 \
-         nodejs-dev npm nodejs-legacy docker.io && \
-         npm install -g grunt-cli && \
-         apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv 7F0CEB10 && \
-         echo 'deb http://downloads-distro.mongodb.org/repo/ubuntu-upstart dist 10gen' | sudo tee /etc/apt/sources.list.d/mongodb.list && \
-         apt-get update && \
-         apt-get install -y mongodb-10gen=2.4.14
 
 
 RUN luarocks install luasocket;\
@@ -45,6 +50,7 @@ ENV TARGET /kb/deployment
 ENV PATH ${TARGET}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 # Incremental package updates not yet in the run-time
+# May not be needed anymore
 RUN cpanm -i REST::Client && cpanm -i Time::ParseDate && \
     cd /kb/bootstrap/kb_seed_kmers/ && \
     ./build.seed_kmers /kb/runtime/ && \
@@ -67,136 +73,103 @@ RUN cd /kb && \
      git clone --recursive https://github.com/kbase/kbrest_common && \
      git clone --recursive https://github.com/kbase/kb_sdk -b develop && \
      cd /kb/dev_container && \
+     grep -lr kbase.us/services /kb/| grep -v docs/ |\
+        xargs sed -ri 's|https?://kbase.us/services|https://public.hostname.org:8443/services|g' && \
      ./bootstrap /kb/runtime && \
      . ./user-env.sh && make && make deploy
 
 
+# Checkout core kbase software
 RUN cd /kb/dev_container/modules && \
-     git clone --recursive https://github.com/kbase/handle_service -b development && \
-     git clone --recursive https://github.com/kbase/kb_model_seed -b dev && \
-     git clone --recursive https://github.com/kbase/kmer_annotation_figfam && \
+     git clone --recursive https://github.com/kbase/handle_service -b develop && \
      git clone --recursive https://github.com/kbase/narrative_method_store -b develop && \
-     git clone --recursive https://github.com/kbase/ontology_service && \
-     git clone --recursive https://github.com/kbase/matR && \
-     git clone --recursive https://github.com/kbase/protein_structure_service && \
-     git clone --recursive https://github.com/kbase/erdb_service && \
      git clone --recursive https://github.com/kbase/narrative_job_service -b develop && \
-     git clone --recursive https://github.com/kbase/KBaseFBAModeling -b dev && \
-     git clone --recursive https://github.com/kbase/handle_mngr && \
-     git clone --recursive https://github.com/kbase/idserver && \
-     git clone --recursive https://github.com/kbase/meme && \
-     git clone --recursive https://github.com/kbase/translation && \
-     git clone --recursive https://github.com/kbase/strep_repeats && \
+     git clone --recursive https://github.com/kbase/handle_mngr -b develop && \
      git clone --recursive https://github.com/kbase/njs_wrapper -b develop && \
+     git clone --recursive https://github.com/kbase/narrative_job_proxy -b develop && \
      git clone --recursive https://github.com/kbase/shock_service && \
-     git clone --recursive https://github.com/kbase/trees -b develop && \
-     mv trees/data /kb/deployment/services/trees/ && \
-     mkdir trees/data && \
-     git clone --recursive https://github.com/kbase/expression && \
      git clone --recursive https://github.com/kbase/auth_service && \
-     git clone --recursive https://github.com/kbase/workspace_deluxe -b dev && \
+     git clone --recursive https://github.com/kbase/workspace_deluxe -b develop && \
      git clone --recursive https://github.com/kbase/awe_service && \
      git clone --recursive https://github.com/kbase/search && \
-     git clone --recursive https://github.com/kbase/protein_info_service && \
-     git clone --recursive https://github.com/kbase/transform -b develop && \
-     rm -rf transform/t && \
-     git clone --recursive https://github.com/kbase/uploader && \
-     git clone --recursive https://github.com/kbase/gwas && \
-     git clone --recursive https://github.com/kbase/kb_seed && \
-     git clone --recursive https://github.com/kbase/coexpression -b develop && \
      git clone --recursive https://github.com/kbase/java_type_generator && \
-     git clone --recursive https://github.com/kbase/m5nr && \
-     git clone --recursive https://github.com/kbase/genome_comparison && \
      git clone --recursive https://github.com/kbase/user_profile -b develop && \
-     git clone --recursive https://github.com/kbase/communities_api -b develop && \
-     git clone --recursive https://github.com/kbase/user_and_job_state && \
-     git clone --recursive https://github.com/kbase/networks && \
-     git clone --recursive https://github.com/kbase/genome_annotation && \
-     git clone --recursive https://github.com/kbase/id_map && \
-     git clone --recursive https://github.com/kbase/cbd && \
+     git clone --recursive https://github.com/kbase/user_and_job_state -b develop && \
+     git clone --recursive https://github.com/kbase/catalog -b develop && \
+     git clone --recursive https://github.com/kbaseincubator/service_wizard -b develop && \
+     git clone --recursive https://github.com/kbase/data_import_export -b dev && \
      git clone --recursive https://github.com/kbase/kbwf_common && \
-     git clone --recursive https://github.com/kbase/probabilistic_annotation && \
-     git clone --recursive https://github.com/kbase/mgrast_pipeline -b develop && \
-     git clone --recursive https://github.com/kbase/genome_util -b develop && \
-     git clone --recursive https://github.com/kbase/feature_values -b develop && \
+     grep -lr kbase.us/services /kb/| grep -v docs/ | \
+        xargs sed -ri 's|https?://kbase.us/services|https://public.hostname.org:8443/services|g' && \
      find /kb/dev_container/modules -iname ".git" | grep -v communities_api | grep -v m5nr | xargs rm -rf 
 
+# Build and deploy kbase core software
 ADD autodeploy.cfg /kb/dev_container/autodeploy.cfg
 RUN cd /kb/dev_container && \
      . ./user-env.sh && make && \
      perl auto-deploy ./autodeploy.cfg
 
+# Checkout narrative and UI
+# Fixup kbase URL references
+RUN \
+        cd /kb/dev_container/modules && \
+        git clone --recursive https://github.com/kbase/kbase-ui -b develop && \
+        git clone --recurse-submodules https://github.com/kbase/narrative -b develop && \
+        grep -lr kbase.us/services /kb/| grep -v docs/ | \
+          xargs sed -ri 's|https?://kbase.us/services|https://public.hostname.org:8443/services|g' && \
+        cd /kb/dev_container/modules/kbase-ui && \
+        make init && make config=prod build && ./deploy.sh && \
+        rm -rf /kb/dev_container/modules/kbase-ui/.git /kb/dev_container/modules/narrative/.git
+
+# Minor fixes
+RUN \
+        apt-get install -y python-gevent && \
+        wget https://github.com/rancher/rancher-compose/releases/download/v0.8.5/rancher-compose-linux-amd64-v0.8.5.tar.gz && \
+        tar xzf rancher-compose-linux-amd64-v0.8.5.tar.gz  && \
+        mv ./rancher-compose-v0.8.5/rancher-compose  /usr/bin/ && \
+        pip install semantic_version && \
+        pip install gdapi
+
 # Make things run in the foreground and spit out logs -- hacky
 RUN \
-        sed -i 's/--daemonize [^ ]*log//' /kb/deployment/services/Transform/start_service;\
-        sed -i 's/--daemonize//' /kb/deployment/services/*/start_service;\
-        sed -i 's/--error-log [^ "]*//' /kb/deployment/services/*/start_service;\
-        sed -i 's/--pid [^ "]*//' /kb/deployment/services/*/start_service;\
-        [ -e /kb/deployment//services/fbaModelServices/start_service ] && sed -i 's/starman -D/starman/' /kb/deployment/services/fbaModelServices/start_service;\
-        sed -i 's/\/kb\/runtime\/sbin\/daemonize .*\/kb/\/kb/' /kb/deployment/services/*/start_service;\
-        sed -i 's/>.*//' /kb/deployment//services/*/start_service;\
-        sed -i 's/nohup //' /kb/deployment//services/*/start_service
+        sed -i 's/--daemonize [^ ]*log//' /kb/deployment/services/catalog/start_service && \
+        sed -i 's/--daemonize [^ ]*log//' /kb/deployment/services/narrativejobproxy/start_service && \
+        sed -i 's/--daemonize [^ ]*log//' /kb/deployment/services/service_wizard/start_service && \
+        sed -i 's/--daemonize//' /kb/deployment/services/*/start_service && \
+        sed -i 's/--error-log [^ "]*//' /kb/deployment/services/*/start_service && \
+        sed -i 's/--pid [^ "]*//' /kb/deployment/services/*/start_service && \
+        sed -i 's/\/kb\/runtime\/sbin\/daemonize .*\/kb/\/kb/' /kb/deployment/services/*/start_service && \
+        sed -i 's/>.*//' /kb/deployment/services/njs_wrapper/start_service && \
+        sed -i 's/nohup //' /kb/deployment/services/*/start_service
 
+# General fixup
 RUN \
-        cd /kb/dev_container/modules;\
-        git clone --recursive https://github.com/kbase/ui-common -b develop && \
-        git clone --recurse-submodules https://github.com/kbase/narrative -b docker && \
-        rm -rf /kb/dev_container/modules/ui-common/.git /kb/dev_container/modules/narrative/.git
+    cd /kb/dev_container/modules/auth_service && . ../../user-env.sh && \
+    mv authorization_server/oauth.py authorization_server/koauth.py && \
+    sed -i 's/from oauth/from koauth/' authorization_server/authorization_server/urls.py  && \
+    sed -i 's/oauth/koauth/' authorization_server/authorization_server/settings.py  && \
+    sed -i 's/.\/start_service/echo done/' Makefile  && \
+    sed -i 's/from django.conf.urls.d/#from django.conf.urls.d/' authorization_server/authorization_server/urls.py  && \
+    make deploy-services && \
+    sed -i 's/server.err/server.err daemonize=false/' /kb/deployment/services/authorization_server/start_service
 
-ADD ./scripts /root/scripts
-ADD ./config /root/config
+ADD ./scripts /kb/scripts
+ADD ./config /kb/config
 # Additions
 # - link is for backwards compatibility
+#	cp /kb/config/nginx-full.cfg /etc/nginx/nginx.cfg && \
 RUN \
-        cpanm -i Config::IniFiles && \
-        ln -s /kb/deployment/deployment.cfg /root/cluster.ini.docker && \
-        ln -s /root/scripts/config_mysql /root/config/setup_mysql && \
-        ln -s /root/scripts/config_mongo /root/config/setup_mongo && \
-        ln -s /root/scripts/config_Workspace /root/config/postprocess_Workspace && \
-        ln -s /root/scripts/config_Workspace /root/scripts/setup_Workspace && \
-        ln -s /root/scripts/config_aweworker /root/config/postprocess_aweworker
+        sed -i 's/user www-data;/user www-data docker;\ndaemon off;\nerror_log \/dev\/stdout info;/' /etc/nginx/nginx.conf && \
+        mkdir -p /kb/deployment/services/narrative/docker && \
+        cp -a /kb/dev_container/modules/narrative/docker/* /kb/deployment/services/narrative/docker/ && \
+        ln -s /kb/scripts/config_mysql /kb/config/setup_mysql && \
+        ln -s /kb/scripts/config_mongo /kb/config/setup_mongo && \
+        ln -s /kb/scripts/config_Workspace /kb/config/postprocess_Workspace && \
+        ln -s /kb/scripts/config_aweworker /kb/config/postprocess_aweworker && \
+        chmod a+rx /kb/scripts /kb/config /kb/scripts/*
 
-WORKDIR /root/
+WORKDIR /kb/
 
-ONBUILD ENV USER root
-
-# Eventually move away from cluster.ini
-ONBUILD ADD cluster.ini /root/deployment.cfg
-ONBUILD ADD ssl /root/ssl
-ONBUILD RUN ln -s /root/deployment.cfg /root/cluster.ini
-
-# Add the ssl certs into the certificate tree
-ONBUILD RUN ( [ ! -e ssl/proxy.crt ] || ( cat ssl/proxy.crt  >> /etc/ssl/certs/ca-certificates.crt && \
-    cat ssl/proxy.crt > /etc/ssl/certs/`openssl x509 -noout -hash -in ssl/proxy.crt`.0 && \
-    cat ssl/proxy.crt  >> /usr/local/lib/python2.7/dist-packages/requests/cacert.pem ) ) && \
-    ( [ ! -e ssl/narrative.crt ] || ( cat ssl/narrative.crt  >> /etc/ssl/certs/ca-certificates.crt && \
-    cat ssl/narrative.crt > /etc/ssl/certs/`openssl x509 -noout -hash -in ssl/narrative.crt`.0 ) )
-
-
-# This run command does several things including:
-# - Changing the memory size for the workspace
-# - Change memory for other glassfish services
-# - Deploy the nginx config (setup_www)
-# - Run postporcess for shock and awe
-# - Clones special versions of ui-common and narrative
-
-ONBUILD RUN cp ./deployment.cfg /kb/deployment/deployment.cfg && \
-        cd /kb/dev_container/ && . ./user-env.sh && \
-        sed -i 's/10000/256/' /kb/deployment/services/workspace/start_service && \
-        sed -i 's/15000/384/' /kb/deployment/services/workspace/start_service && \
-        sed -i 's/--Xms 1000 --Xmx 2000/--Xms 384 --Xmx 512/' /kb/deployment/services/*/start_service && \
-        /root/scripts/config_shock && \
-        /root/scripts/config_awe && \
-        sed -i 's/ssl_verify = True/ssl_verify = False/' /kb/deployment/lib/biokbase/Transform/script_utils.py && \
-        /root/scripts/config_Transform && \
-        [ -e /mnt/Shock/logs ] || mkdir -p /mnt/Shock/logs
-
-# Fix up URLs in clients
-ONBUILD RUN PUBLIC=$(grep baseurl= deployment.cfg|sed 's/baseurl=//'|sed 's/:.*//') && \
-         sed -i "s|api-url=$|api-url=http://$PUBLIC:8080/services/shock-api|" /kb/deployment//services/shock_service/conf/shock.cfg  && \
-         sed -i "s|public.hostname.org|$PUBLIC|" /kb/deployment/lib/biokbase/*/Client.py && \
-         sed -i "s|public.hostname.org|$PUBLIC|" /kb/deployment/lib/Bio/KBase/*/Client.pm && \
-         sed -i "s|public.hostname.org|$PUBLIC|" /kb/deployment/lib/javascript/*/Client.js
-
-ONBUILD ENTRYPOINT [ "./scripts/entrypoint.sh" ]
-ONBUILD CMD [ ]
+ENV USER root
+ENTRYPOINT [ "/kb/scripts/entrypoint.sh" ]
+CMD [ ]
