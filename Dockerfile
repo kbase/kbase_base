@@ -83,6 +83,8 @@ RUN cd /kb && \
 
 
 # Checkout core kbase software
+ADD ./awe.fix /tmp/awe.fix
+
 RUN cd /kb/dev_container/modules && \
      git clone --recursive https://github.com/kbase/handle_service -b staging && \
      git clone --recursive https://github.com/kbase/narrative_method_store -b staging && \
@@ -94,6 +96,7 @@ RUN cd /kb/dev_container/modules && \
      git clone --recursive https://github.com/kbase/auth_service && \
      git clone --recursive https://github.com/kbase/workspace_deluxe -b staging && \
      git clone --recursive https://github.com/kbase/awe_service && \
+     (cd /kb/dev_container/modules/awe_service &&  cat /tmp/awe.fix|patch -p1) && \
      git clone --recursive https://github.com/kbase/search && \
      git clone --recursive https://github.com/kbase/java_type_generator && \
      git clone --recursive https://github.com/kbase/user_profile -b staging && \
