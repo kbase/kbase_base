@@ -79,7 +79,8 @@ RUN cd /kb && \
      grep -lr kbase.us/services /kb/| grep -v docs/ |\
         xargs sed -ri 's|https?://kbase.us/services|https://public.hostname.org:8443/services|g' && \
      ./bootstrap /kb/runtime && \
-     . ./user-env.sh && make && make deploy
+     . ./user-env.sh && make && make deploy && \
+     rm -rf modules/kb_sdk
 
 
 # Checkout core kbase software
@@ -113,7 +114,7 @@ RUN cd /kb/dev_container/modules && \
 # Build and deploy kbase core software
 ADD autodeploy.cfg /kb/dev_container/autodeploy.cfg
 RUN cd /kb/dev_container && \
-     . ./user-env.sh && make && \
+     . ./user-env.sh && PATH=/kb/deployment/bin:$PATH && make && \
      perl auto-deploy ./autodeploy.cfg
 
 # Checkout narrative and UI
