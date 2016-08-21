@@ -1,0 +1,11 @@
+#!/bin/sh
+
+cd ${1}
+for f in $(ls); do
+  if [ -e $f/.git ] ; then
+    B=$(cd $f;git branch |grep ^*|sed 's/..//')
+    R=$(cd $f;git remote -v|grep fetch|grep origin|awk '{print $2}')
+    L=$(cd $f;git log --pretty='%H|%cd|%s' -n 1)
+    echo "$f|$R|$B|$L"
+  fi
+done

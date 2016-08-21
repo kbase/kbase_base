@@ -56,11 +56,13 @@ sed -i "s|api-url=$|api-url=https://$PUBLICSSL/services/shock-api|" /kb/deployme
 sed -i "s|public.hostname.org:8443|$PUBLICSSL|" /kb/deployment/lib/biokbase/*/Client.py
 sed -i "s|public.hostname.org:8443|$PUBLICSSL|" /kb/deployment/lib/Bio/KBase/*/Client.pm
 sed -i "s|public.hostname.org:8443|$PUBLICSSL|" /kb/deployment/lib/javascript/*/Client.js
-sed -i "s|public.hostname.org:8443|$PUBLICSSL|" /kb/deployment/services/kbase-ui/modules/config/service.yml
-
 NARRATIVE_URL=$(./scripts/get_config /kb/deployment/deployment.cfg narrative service-url|sed 's|http.*://||'|sed 's|/||')
+
+if [ -e /kb/deployment/services/kbase-ui ] ; then
+sed -i "s|public.hostname.org:8443|$PUBLICSSL|" /kb/deployment/services/kbase-ui/modules/config/service.yml
 sed -i "s|narrative.kbase.us|$NARRATIVE_URL|" /kb/deployment/services/kbase-ui/modules/config/service.yml
 sed -i "s|narrative.kbase.us|$NARRATIVE_URL|" /kb/deployment/services/kbase-ui/search/config.json
+fi
 
 grep -lr public.hostname.org /kb/deployment/*bin/ /kb/deployment/lib/ /kb/deployment/services/ | \
    xargs sed -i "s|public.hostname.org:8443|$PUBLICSSL|g"

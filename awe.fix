@@ -1,0 +1,13 @@
+diff --git a/Makefile b/Makefile
+index 633037e..88935d5 100644
+--- a/Makefile
++++ b/Makefile
+@@ -109,6 +109,8 @@ $(BIN_DIR)/awe-server: AWE/awe-server/awe-server.go
+ 	wget -O $(GO_TMP_DIR)/src/github.com/docker/docker.zip https://github.com/docker/docker/archive/v1.6.1.zip
+ 	unzip -d $(GO_TMP_DIR)/src/github.com/docker $(GO_TMP_DIR)/src/github.com/docker/docker.zip
+ 	mv -v $(GO_TMP_DIR)/src/github.com/docker/docker-1.6.1 $(GO_TMP_DIR)/src/github.com/docker/docker
++	export GOPATH=$(GO_TMP_DIR); go get -v github.com/Sirupsen/logrus/... ;echo "Ignore filaure"
++	(cd /tmp/go_build.tmp/src/github.com/Sirupsen/logrus/; git checkout v0.9.0)
+ 	export GOPATH=$(GO_TMP_DIR); go get -v github.com/MG-RAST/AWE/...
+ 	cp -v $(GO_TMP_DIR)/bin/awe-server $(BIN_DIR)/awe-server
+ 	cp -v $(GO_TMP_DIR)/bin/awe-client $(BIN_DIR)/awe-client

@@ -91,6 +91,26 @@ elif [ "$MYSERVICES" = "initialize" ] ; then
   ./scripts/config_wstypes
 elif [ "$MYSERVICES" = "config" ] ; then
   cat /kb/deployment/deployment.cfg  
+elif [ "$MYSERVICES" = "checkupdate" ] ; then
+  while read LINE
+  do
+     MODULE=$(echo $LINE|awk -F\| '{print $1}')
+     REPO=$(echo $LINE|awk -F\| '{print $2}')
+     BRANCH=$(echo $LINE|awk -F\| '{print $3}')
+     TAG=$(echo $LINE|awk -F\| '{print $4}')
+     RTAG=$(git ls-remote $REPO heads/$BRANCH|awk '{print $1}')
+     echo ".. $MODULE"
+     if [ "$TAG" != "$RTAG" ] ; then
+       echo "Changed detcted in $REPO $BRANCH"
+       exit 1
+     fi
+  done < /tmp/tags
+  exit 0
+elif [ "$MYSERVICES" = "showtags" ] ; then
+  while read LINE
+  do
+    echo $LINE|awk -F\| '{printf "%-25.25s %-50s %-10s %-.10s  %-10s\n",$1,$2,$3,$4,$5}'
+  done < <(sort /tmp/tags)
 else
   [ -e /mnt/Shock/data ] || mkdir /mnt/Shock/data
   [ -e /mnt/Shock/site ] || mkdir /mnt/Shock/site

@@ -51,15 +51,11 @@ ENV PATH ${TARGET}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/
 
 # Incremental package updates not yet in the run-time
 # May not be needed anymore
-RUN cpanm -i REST::Client && cpanm -i Time::ParseDate && \
-    cd /kb/bootstrap/kb_seed_kmers/ && \
-    ./build.seed_kmers /kb/runtime/ && \
-    cd /kb/bootstrap/kb_glpk/ && \
-    ./glpk_build.sh /kb/runtime/
-
+RUN cpanm -i REST::Client && cpanm -i Time::ParseDate
 
 # Bogus file to trigger a git clone and rebuild
 ADD build.trigger /tmp/
+ADD ./scripts/githashes /tmp/githashes
 RUN ( echo "Git clone";date) > /tmp/git.log
 
 # Clone the base repos
@@ -72,14 +68,19 @@ RUN cd /kb && \
      git clone --recursive https://github.com/kbase/auth -b develop && \
      git clone --recursive https://github.com/kbase/kbrest_common && \
      git clone --recursive https://github.com/kbase/kb_sdk -b develop && \
+     /tmp/githashes /kb/dev_container/modules > /tmp/tags && \
+     rm -rf /kb/dev_container/modules/*/.git && \
      cd /kb/dev_container && \
      grep -lr kbase.us/services /kb/| grep -v docs/ |\
         xargs sed -ri 's|https?://kbase.us/services|https://public.hostname.org:8443/services|g' && \
      ./bootstrap /kb/runtime && \
-     . ./user-env.sh && make && make deploy
+     . ./user-env.sh && make && make deploy && \
+     rm -rf modules/kb_sdk
 
 
 # Checkout core kbase software
+ADD ./awe.fix /tmp/awe.fix
+
 RUN cd /kb/dev_container/modules && \
      git clone --recursive https://github.com/kbase/handle_service -b develop && \
      git clone --recursive https://github.com/kbase/narrative_method_store -b develop && \
@@ -91,6 +92,7 @@ RUN cd /kb/dev_container/modules && \
      git clone --recursive https://github.com/kbase/auth_service && \
      git clone --recursive https://github.com/kbase/workspace_deluxe -b develop && \
      git clone --recursive https://github.com/kbase/awe_service && \
+     (cd /kb/dev_container/modules/awe_service &&  cat /tmp/awe.fix|patch -p1) && \
      git clone --recursive https://github.com/kbase/search && \
      git clone --recursive https://github.com/kbase/java_type_generator && \
      git clone --recursive https://github.com/kbase/user_profile -b develop && \
@@ -99,6 +101,7 @@ RUN cd /kb/dev_container/modules && \
      git clone --recursive https://github.com/kbaseincubator/service_wizard -b develop && \
      git clone --recursive https://github.com/kbase/data_import_export -b dev && \
      git clone --recursive https://github.com/kbase/kbwf_common && \
+     /tmp/githashes /kb/dev_container/modules >> /tmp/tags && \
      grep -lr kbase.us/services /kb/| grep -v docs/ | \
         xargs sed -ri 's|https?://kbase.us/services|https://public.hostname.org:8443/services|g' && \
      find /kb/dev_container/modules -iname ".git" | grep -v communities_api | grep -v m5nr | xargs rm -rf 
@@ -106,20 +109,15 @@ RUN cd /kb/dev_container/modules && \
 # Build and deploy kbase core software
 ADD autodeploy.cfg /kb/dev_container/autodeploy.cfg
 RUN cd /kb/dev_container && \
-     . ./user-env.sh && make && \
+     . ./user-env.sh && PATH=/kb/deployment/bin:$PATH && make && \
      perl auto-deploy ./autodeploy.cfg
 
 # Checkout narrative and UI
 # Fixup kbase URL references
 RUN \
         cd /kb/dev_container/modules && \
-        git clone --recursive https://github.com/kbase/kbase-ui -b develop && \
-        git clone --recurse-submodules https://github.com/kbase/narrative -b develop && \
         grep -lr kbase.us/services /kb/| grep -v docs/ | \
-          xargs sed -ri 's|https?://kbase.us/services|https://public.hostname.org:8443/services|g' && \
-        cd /kb/dev_container/modules/kbase-ui && \
-        make init && make config=prod build && ./deploy.sh && \
-        rm -rf /kb/dev_container/modules/kbase-ui/.git /kb/dev_container/modules/narrative/.git
+          xargs sed -ri 's|https?://kbase.us/services|https://public.hostname.org:8443/services|g'
 
 # Minor fixes
 RUN \
@@ -128,7 +126,7 @@ RUN \
         tar xzf rancher-compose-linux-amd64-v0.8.5.tar.gz  && \
         mv ./rancher-compose-v0.8.5/rancher-compose  /usr/bin/ && \
         pip install semantic_version && \
-        pip install gdapi
+        pip install gdapi-python
 
 # Make things run in the foreground and spit out logs -- hacky
 RUN \
@@ -158,14 +156,9 @@ ADD ./config /kb/config
 # Additions
 # - link is for backwards compatibility
 #	cp /kb/config/nginx-full.cfg /etc/nginx/nginx.cfg && \
+ADD  lets-encrypt-x3-cross-signed.der /tmp/lets.der
 RUN \
-        sed -i 's/user www-data;/user www-data docker;\ndaemon off;\nerror_log \/dev\/stdout info;/' /etc/nginx/nginx.conf && \
-        mkdir -p /kb/deployment/services/narrative/docker && \
-        cp -a /kb/dev_container/modules/narrative/docker/* /kb/deployment/services/narrative/docker/ && \
-        ln -s /kb/scripts/config_mysql /kb/config/setup_mysql && \
-        ln -s /kb/scripts/config_mongo /kb/config/setup_mongo && \
-        ln -s /kb/scripts/config_Workspace /kb/config/postprocess_Workspace && \
-        ln -s /kb/scripts/config_aweworker /kb/config/postprocess_aweworker && \
+        keytool -import -keystore /kb/runtime/glassfish3/glassfish/lib/templates/cacerts.jks -storepass changeit -noprompt -trustcacerts -alias letsencryptauthorityx3 -file /tmp/lets.der && \
         chmod a+rx /kb/scripts /kb/config /kb/scripts/*
 
 WORKDIR /kb/
