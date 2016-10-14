@@ -130,8 +130,7 @@ RUN \
         wget https://github.com/rancher/rancher-compose/releases/download/v0.8.5/rancher-compose-linux-amd64-v0.8.5.tar.gz && \
         tar xzf rancher-compose-linux-amd64-v0.8.5.tar.gz  && \
         mv ./rancher-compose-v0.8.5/rancher-compose  /usr/bin/ && \
-        pip install semantic_version && \
-        pip install gdapi-python
+        pip install semantic_version requests_toolbelt gdapi-python
 
 # Make things run in the foreground and spit out logs -- hacky
 RUN \
@@ -156,6 +155,15 @@ RUN \
     make deploy-services && \
     sed -i 's/server.err/server.err daemonize=false/' /kb/deployment/services/authorization_server/start_service
 
+# Hot fix for CallbackServer interface issue
+RUN \
+    cd /kb/dev_container/modules/njs_wrapper/ && \
+    sed -i 's/en0/eth0/' ./src/us/kbase/common/executionengine/CallbackServer.java && \
+    . /kb/dev_container/user-env.sh && \
+    rm -rf /kb/deployment/services/njs_wrapper/webapps && \
+    make && make deploy && \
+    sed -i 's/>.*//' /kb/deployment/services/njs_wrapper/start_service
+
 ADD ./scripts /kb/scripts
 ADD ./config /kb/config
 # Additions
@@ -164,6 +172,7 @@ ADD ./config /kb/config
 ADD  lets-encrypt-x3-cross-signed.der /tmp/lets.der
 RUN \
         keytool -import -keystore /kb/runtime/glassfish3/glassfish/lib/templates/cacerts.jks -storepass changeit -noprompt -trustcacerts -alias letsencryptauthorityx3 -file /tmp/lets.der && \
+        keytool -import -keystore /usr/lib/jvm/java-7-oracle/jre/lib/security/cacerts -storepass changeit -noprompt -trustcacerts -alias letsencryptauthorityx3 -file /tmp/lets.der && \
         sed -i 's/user www-data;/user www-data docker;\ndaemon off;\nerror_log \/dev\/stdout info;/' /etc/nginx/nginx.conf && \
         mkdir -p /kb/deployment/services/narrative/docker && \
         ln -s /kb/scripts/config_mysql /kb/config/setup_mysql && \

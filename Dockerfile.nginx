@@ -65,14 +65,17 @@ ADD  lets-encrypt-x3-cross-signed.der /tmp/lets.der
 
 # Temporary fix for docker 1.12 api change.  Should get merged into narrative.
 #
-ADD lua /tmp/lua
 RUN \
         keytool -import -keystore /kb/runtime/glassfish3/glassfish/lib/templates/cacerts.jks -storepass changeit -noprompt -trustcacerts -alias letsencryptauthorityx3 -file /tmp/lets.der && \
         sed -i 's/user www-data;/user www-data docker;\ndaemon off;\nerror_log \/dev\/stdout info;/' /etc/nginx/nginx.conf && \
         mkdir -p /kb/deployment/services/narrative/docker && \
         cp -a /kb/src/narrative/docker/* /kb/deployment/services/narrative/docker/ && \
-        cp -a /tmp/lua/* /kb/deployment/services/narrative/docker/ && \
         chmod a+rx /kb/scripts /kb/config /kb/scripts/*
+
+ADD lua/notelauncher.lua /kb/deployment/services/narrative/docker/
+ADD lua/proxy_mgr.lua /kb/deployment/services/narrative/docker/
+ADD lua/proxy_mgr.lua /kb/deployment/services/narrative/docker/proxy_mgr2.lua
+ADD lua/docker.lua /kb/deployment/services/narrative/docker/
 
 WORKDIR /kb/
 
