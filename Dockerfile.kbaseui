@@ -30,52 +30,32 @@ RUN \
    apt-get update && apt-get install -y docker-engine=1.7.1-0~trusty
 
 
-
-RUN luarocks install luasocket;\
-    luarocks install luajson;\
-    luarocks install penlight;\
-    luarocks install lua-spore;\
-    luarocks install luacrypto
-
 ENV TARGET /kb/deployment
 ENV PATH ${TARGET}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 # Bogus file to trigger a git clone and rebuild
-ADD build-nginx.trigger /tmp/
+ADD build-kbaseui.trigger /tmp/
 RUN ( echo "Git clone";date) > /tmp/git.log
 
 # Checkout narrative and UI
 # Fixup kbase URL references
 RUN \
         mkdir /kb/src && cd /kb/src && \
-        git clone https://github.com/kbase/narrative -b staging && \
+        git clone --recursive https://github.com/scanon/kbase-ui -b staging && \
         grep -lr kbase.us/services /kb/| grep -v docs/ | \
           xargs sed -ri 's|https?://kbase.us/services|https://public.hostname.org:8443/services|g' && \
-        rm -rf /kb/src/narrative/.git
+        cd /kb/src/kbase-ui && \
+        make init && make config=prod build && ./deploy.sh && \
+        rm -rf /kb/src/kbase-ui/.git
 
 ADD ./scripts /kb/scripts
 ADD ./config /kb/config
-# Additions
-# - link is for backwards compatibility
-#	cp /kb/config/nginx-full.cfg /etc/nginx/nginx.cfg && \
-ADD  lets-encrypt-x3-cross-signed.der /tmp/lets.der
-
-# Temporary fix for docker 1.12 api change.  Should get merged into narrative.
 #
 RUN \
-        keytool -import -keystore /kb/runtime/glassfish3/glassfish/lib/templates/cacerts.jks -storepass changeit -noprompt -trustcacerts -alias letsencryptauthorityx3 -file /tmp/lets.der && \
-        sed -i 's/user www-data;/user www-data docker;\ndaemon off;\nerror_log \/dev\/stdout info;/' /etc/nginx/nginx.conf && \
-        mkdir -p /kb/deployment/services/narrative/docker && \
-        cp -a /kb/src/narrative/docker/* /kb/deployment/services/narrative/docker/ && \
         chmod a+rx /kb/scripts /kb/config /kb/scripts/*
-
-ADD lua/notelauncher.lua /kb/deployment/services/narrative/docker/
-ADD lua/proxy_mgr.lua /kb/deployment/services/narrative/docker/
-ADD lua/proxy_mgr.lua /kb/deployment/services/narrative/docker/proxy_mgr2.lua
-ADD lua/docker.lua /kb/deployment/services/narrative/docker/
 
 WORKDIR /kb/
 
 ENV USER root
-ENTRYPOINT [ "/kb/scripts/nginx.sh" ]
+ENTRYPOINT [ "/kb/scripts/kbaseui.sh" ]
 CMD [ ]
