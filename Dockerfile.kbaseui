@@ -41,11 +41,11 @@ RUN ( echo "Git clone";date) > /tmp/git.log
 # Fixup kbase URL references
 RUN \
         mkdir /kb/src && cd /kb/src && \
-        git clone --recursive https://github.com/scanon/kbase-ui -b staging && \
+        git clone --recursive https://github.com/kbase/kbase-ui -b staging && \
         grep -lr kbase.us/services /kb/| grep -v docs/ | \
           xargs sed -ri 's|https?://kbase.us/services|https://public.hostname.org:8443/services|g' && \
         cd /kb/src/kbase-ui && \
-        make init && make config=prod build && ./deploy.sh && \
+        make init && make config=next build && ./deploy.sh && \
         rm -rf /kb/src/kbase-ui/.git
 
 ADD ./scripts /kb/scripts
