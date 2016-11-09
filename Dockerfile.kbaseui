@@ -35,13 +35,15 @@ ENV PATH ${TARGET}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/
 
 # Bogus file to trigger a git clone and rebuild
 ADD build-kbaseui.trigger /tmp/
-RUN ( echo "Git clone";date) > /tmp/git.log
+ENV BRANCH staging
+ADD ./scripts/githashes /tmp/githashes
 
 # Checkout narrative and UI
 # Fixup kbase URL references
 RUN \
         mkdir /kb/src && cd /kb/src && \
-        git clone --recursive https://github.com/kbase/kbase-ui -b staging && \
+        git clone --recursive https://github.com/kbase/kbase-ui -b $BRANCH && \
+        /tmp/githashes /kb/src > /tmp/tags && \
         grep -lr kbase.us/services /kb/| grep -v docs/ | \
           xargs sed -ri 's|https?://kbase.us/services|https://public.hostname.org:8443/services|g' && \
         cd /kb/src/kbase-ui && \

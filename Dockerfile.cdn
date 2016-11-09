@@ -35,11 +35,12 @@ ENV PATH ${TARGET}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/
 
 # Bogus file to trigger a git clone and rebuild
 ADD build-cdn.trigger /tmp/
+ADD ./scripts/githashes /tmp/githashes
 
 RUN \
-        ( echo "Git clone";date) > /tmp/git.log && \
         mkdir /kb/src && cd /kb/src && \
         git clone https://github.com/kbase/kbase-cdn-js && \
+        /tmp/githashes /kb/src > /tmp/tags && \
         cd kbase-cdn-js && make clean && make init && make build && make dist && \
         rm -rf .git
 

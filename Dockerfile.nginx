@@ -42,13 +42,15 @@ ENV PATH ${TARGET}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/
 
 # Bogus file to trigger a git clone and rebuild
 ADD build-nginx.trigger /tmp/
-RUN ( echo "Git clone";date) > /tmp/git.log
+ADD ./scripts/githashes /tmp/githashes
+ENV BRANCH staging
 
 # Checkout narrative and UI
 # Fixup kbase URL references
 RUN \
         mkdir /kb/src && cd /kb/src && \
-        git clone https://github.com/kbase/narrative -b staging && \
+        git clone https://github.com/kbase/narrative -b $BRANCH && \
+        /tmp/githashes /kb/src > /tmp/tags && \
         grep -lr kbase.us/services /kb/| grep -v docs/ | \
           xargs sed -ri 's|https?://kbase.us/services|https://public.hostname.org:8443/services|g' && \
         rm -rf /kb/src/narrative/.git

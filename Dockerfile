@@ -52,16 +52,14 @@ ENV PATH ${TARGET}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/
 # Incremental package updates not yet in the run-time
 # May not be needed anymore
 RUN cpanm -i REST::Client && cpanm -i Time::ParseDate
-#    cd /kb/bootstrap/kb_seed_kmers/ && \
-#    ./build.seed_kmers /kb/runtime/ && \
-#    cd /kb/bootstrap/kb_glpk/ && \
-#    ./glpk_build.sh /kb/runtime/
 
 
 # Bogus file to trigger a git clone and rebuild
 ADD build.trigger /tmp/
 ADD ./scripts/githashes /tmp/githashes
 RUN ( echo "Git clone";date) > /tmp/git.log
+
+ENV BRANCH staging
 
 # Clone the base repos
 RUN cd /kb && \
@@ -70,9 +68,9 @@ RUN cd /kb && \
      git clone --recursive https://github.com/kbase/kbapi_common && \
      git clone --recursive https://github.com/kbase/typecomp && \
      git clone --recursive https://github.com/kbase/jars && \
-     git clone --recursive https://github.com/kbase/auth -b staging && \
+     git clone --recursive https://github.com/kbase/auth -b $BRANCH && \
      git clone --recursive https://github.com/kbase/kbrest_common && \
-     git clone --recursive https://github.com/kbase/kb_sdk -b staging && \
+     git clone --recursive https://github.com/kbase/kb_sdk -b $BRANCH && \
      /tmp/githashes /kb/dev_container/modules > /tmp/tags && \
      rm -rf /kb/dev_container/modules/*/.git && \
      cd /kb/dev_container && \
@@ -87,23 +85,23 @@ RUN cd /kb && \
 ADD ./awe.fix /tmp/awe.fix
 
 RUN cd /kb/dev_container/modules && \
-     git clone --recursive https://github.com/kbase/handle_service -b staging && \
-     git clone --recursive https://github.com/kbase/narrative_method_store -b staging && \
-     git clone --recursive https://github.com/kbase/narrative_job_service -b staging && \
-     git clone --recursive https://github.com/kbase/handle_mngr -b staging && \
-     git clone --recursive https://github.com/kbase/njs_wrapper -b staging && \
-     git clone --recursive https://github.com/kbase/narrative_job_proxy -b staging && \
+     git clone --recursive https://github.com/kbase/handle_service -b $BRANCH && \
+     git clone --recursive https://github.com/kbase/narrative_method_store -b $BRANCH && \
+     git clone --recursive https://github.com/kbase/narrative_job_service -b $BRANCH && \
+     git clone --recursive https://github.com/kbase/handle_mngr -b $BRANCH && \
+     git clone --recursive https://github.com/kbase/njs_wrapper -b $BRANCH && \
+     git clone --recursive https://github.com/kbase/narrative_job_proxy -b $BRANCH && \
      git clone --recursive https://github.com/kbase/shock_service && \
      git clone --recursive https://github.com/kbase/auth_service && \
-     git clone --recursive https://github.com/kbase/workspace_deluxe -b staging && \
+     git clone --recursive https://github.com/kbase/workspace_deluxe -b $BRANCH && \
      git clone --recursive https://github.com/kbase/awe_service && \
      (cd /kb/dev_container/modules/awe_service &&  cat /tmp/awe.fix|patch -p1) && \
      git clone --recursive https://github.com/kbase/search && \
      git clone --recursive https://github.com/kbase/java_type_generator && \
-     git clone --recursive https://github.com/kbase/user_profile -b staging && \
-     git clone --recursive https://github.com/kbase/user_and_job_state -b staging && \
-     git clone --recursive https://github.com/kbase/catalog -b staging && \
-     git clone --recursive https://github.com/kbaseincubator/service_wizard -b develop && \
+     git clone --recursive https://github.com/kbase/user_profile -b $BRANCH && \
+     git clone --recursive https://github.com/kbase/user_and_job_state -b $BRANCH && \
+     git clone --recursive https://github.com/kbase/catalog -b $BRANCH && \
+     git clone --recursive https://github.com/kbaseincubator/service_wizard -b $BRANCH && \
      git clone --recursive https://github.com/kbase/data_import_export && \
      git clone --recursive https://github.com/kbase/kbwf_common && \
      /tmp/githashes /kb/dev_container/modules >> /tmp/tags && \
@@ -156,13 +154,13 @@ RUN \
     sed -i 's/server.err/server.err daemonize=false/' /kb/deployment/services/authorization_server/start_service
 
 # Hot fix for CallbackServer interface issue
-RUN \
-    cd /kb/dev_container/modules/njs_wrapper/ && \
-    sed -i 's/en0/eth0/' ./src/us/kbase/common/executionengine/CallbackServer.java && \
-    . /kb/dev_container/user-env.sh && \
-    rm -rf /kb/deployment/services/njs_wrapper/webapps && \
-    make && make deploy && \
-    sed -i 's/>.*//' /kb/deployment/services/njs_wrapper/start_service
+#RUN \
+#    cd /kb/dev_container/modules/njs_wrapper/ && \
+#    sed -i 's/en0/eth0/' ./src/us/kbase/common/executionengine/CallbackServer.java && \
+#    . /kb/dev_container/user-env.sh && \
+#    rm -rf /kb/deployment/services/njs_wrapper/webapps && \
+#    make && make deploy && \
+#    sed -i 's/>.*//' /kb/deployment/services/njs_wrapper/start_service
 
 ADD ./scripts /kb/scripts
 ADD ./config /kb/config
@@ -173,12 +171,6 @@ ADD  lets-encrypt-x3-cross-signed.der /tmp/lets.der
 RUN \
         keytool -import -keystore /kb/runtime/glassfish3/glassfish/lib/templates/cacerts.jks -storepass changeit -noprompt -trustcacerts -alias letsencryptauthorityx3 -file /tmp/lets.der && \
         keytool -import -keystore /usr/lib/jvm/java-7-oracle/jre/lib/security/cacerts -storepass changeit -noprompt -trustcacerts -alias letsencryptauthorityx3 -file /tmp/lets.der && \
-        sed -i 's/user www-data;/user www-data docker;\ndaemon off;\nerror_log \/dev\/stdout info;/' /etc/nginx/nginx.conf && \
-        mkdir -p /kb/deployment/services/narrative/docker && \
-        ln -s /kb/scripts/config_mysql /kb/config/setup_mysql && \
-        ln -s /kb/scripts/config_mongo /kb/config/setup_mongo && \
-        ln -s /kb/scripts/config_Workspace /kb/config/postprocess_Workspace && \
-        ln -s /kb/scripts/config_aweworker /kb/config/postprocess_aweworker && \
         chmod a+rx /kb/scripts /kb/config /kb/scripts/*
 
 WORKDIR /kb/
