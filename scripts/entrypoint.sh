@@ -60,7 +60,7 @@ elif [ "$MYSERVICES" = "aweworker" ] ; then
   sed -i 's/\/kb\/runtime\/sbin\/daemonize.*PID_FILE//' /kb/deployment/services/awe_service/start_*
   . /kb/deployment/user-env.sh 
   cd /kb/deployment/services/awe_service
-  ./start_aweworker $CGROUP
+  ./start_aweclient $CGROUP
 elif [ "$MYSERVICES" = "narrative_job_service" ] ; then
   USER=$(grep service_auth_name $CONFIG|sed 's/service_auth_name=//')
   PASS=$(grep service_auth_pass $CONFIG|sed 's/service_auth_pass=//')
