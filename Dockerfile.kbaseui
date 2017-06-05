@@ -19,19 +19,28 @@ RUN \
 RUN \
    echo ''|add-apt-repository ppa:nginx/stable && \
    apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv 7F0CEB10 && \
-   curl -sL https://deb.nodesource.com/setup_4.x | bash && \
-   DEBIAN_FRONTEND=noninteractive apt-get install -y \
-     lua5.1 luarocks liblua5.1-0 liblua5.1-0-dev liblua5.1-json liblua5.1-lpeg2 \
-     nginx nginx-extras nodejs \
-     apt-transport-https && \
-   npm install -g grunt-cli && \
    apt-key adv --keyserver hkp://p80.pool.sks-keyservers.net:80 --recv-keys 58118E89F3A912897C070ADBF76221572C52609D && \
+   apt-get update && \
+   DEBIAN_FRONTEND=noninteractive apt-get install -y \
+     apt-transport-https && \
    echo "deb https://apt.dockerproject.org/repo ubuntu-trusty main" >> /etc/apt/sources.list.d/docker.list && \
-   apt-get update && apt-get install -y docker-engine=1.7.1-0~trusty
+# use node 6.x
+   curl -sL https://deb.nodesource.com/setup_6.x | sudo -E bash - && \
+   apt-get update && \
+   DEBIAN_FRONTEND=noninteractive apt-get install -y \
+     libssl-dev \
+     lua5.1 luarocks liblua5.1-0 liblua5.1-0-dev liblua5.1-json liblua5.1-lpeg2 \
+     nginx nginx-extras \
+     nodejs \
+     docker-engine=1.7.1-0~trusty && \
+    npm install -g grunt-cli karma-cli
 
+# this complained when trying to build without cache about needing luasec
+# see https://itschr.is/installing-luasec-with-luarocks-on-ubuntu/
+RUN luarocks install luasec OPENSSL_LIBDIR=/usr/lib/x86_64-linux-gnu/
 
-
-RUN luarocks install luasocket;\
+RUN \
+    luarocks install luasocket;\
     luarocks install luajson;\
     luarocks install penlight;\
     luarocks install lua-spore;\
@@ -41,20 +50,27 @@ ENV TARGET /kb/deployment
 ENV PATH ${TARGET}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 # Bogus file to trigger a git clone and rebuild
-ADD build-nginx.trigger /tmp/
+ADD build-ui.trigger /tmp/
 ADD ./scripts/githashes /tmp/githashes
 RUN ( echo "Git clone";date) > /tmp/git.log
 
 # Checkout narrative and UI
 # Fixup kbase URL references
-#        git clone https://github.com/kbase/narrative -b develop && \
 RUN \
         mkdir /kb/src && cd /kb/src && \
-        git clone https://github.com/kbase/narrative -b auth2 && \
+        git clone --recursive https://github.com/kbase/kbase-ui -b develop && \
         grep -lr kbase.us/services /kb/| grep -v docs/ | \
           xargs sed -ri 's|https?://kbase.us/services|https://public.hostname.org:8443/services|g' && \
         /tmp/githashes /kb/src/ > /tmp/tags && \
-        rm -rf /kb/src/narrative/.git
+# move here to preserve .git dir (TASK-792)
+        cd /kb/src/kbase-ui && \
+        make init && make config=ci build && ./deploy.sh && \
+        rm -rf /kb/src/kbase-ui/.git
+
+# move to above RUN to preserve .git dir (TASK-792)
+#RUN \
+#        cd /kb/src/kbase-ui && \
+#        make init && make config=ci build && ./deploy.sh
 
 ADD ./scripts /kb/scripts
 ADD ./config /kb/config
@@ -63,17 +79,11 @@ ADD ./config /kb/config
 #	cp /kb/config/nginx-full.cfg /etc/nginx/nginx.cfg && \
 ADD  lets-encrypt-x3-cross-signed.der /tmp/lets.der
 
-# proxy_mgr2 is for legacy narrative support
 RUN \
-        keytool -import -keystore /kb/runtime/glassfish3/glassfish/lib/templates/cacerts.jks -storepass changeit -noprompt -trustcacerts -alias letsencryptauthorityx3 -file /tmp/lets.der && \
-        sed -i 's/user www-data;/user www-data docker;\ndaemon off;\nerror_log \/dev\/stdout info;/' /etc/nginx/nginx.conf && \
-        mkdir -p /kb/deployment/services/narrative/docker && \
-        cp -a /kb/src/narrative/docker/* /kb/deployment/services/narrative/docker/ && \
-        cp /kb/deployment/services/narrative/docker/proxy_mgr.lua /kb/deployment/services/narrative/docker/proxy_mgr2.lua  && \
         chmod a+rx /kb/scripts /kb/config /kb/scripts/*
 
 WORKDIR /kb/
 
 ENV USER root
-ENTRYPOINT [ "/kb/scripts/nginx.sh" ]
+ENTRYPOINT [ "/kb/scripts/kbaseui.sh" ]
 CMD [ ]

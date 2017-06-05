@@ -8,6 +8,8 @@
 FROM kbase/runtime:latest
 MAINTAINER Shane Canon scanon@lbl.gov
 
+ENV BRANCH develop
+
 RUN \
    apt-get update && \
    DEBIAN_FRONTEND=noninteractive apt-get upgrade -y && \
@@ -36,13 +38,26 @@ RUN \
    sed -i 's/not cert.get..subjectAltName., .../False/' /usr/local/lib/python2.7/dist-packages/requests/packages/urllib3/connection.py && \
    cpanm -i Config::IniFiles
 
-
+# this complained when trying to build without cache about needing luasec
+# see https://itschr.is/installing-luasec-with-luarocks-on-ubuntu/
+RUN luarocks install luasec OPENSSL_LIBDIR=/usr/lib/x86_64-linux-gnu/
 
 RUN luarocks install luasocket;\
     luarocks install luajson;\
     luarocks install penlight;\
     luarocks install lua-spore;\
     luarocks install luacrypto
+
+# Add openjdk8 and ant for auth2
+RUN DEBIAN_FRONTEND=noninteractive add-apt-repository -y ppa:openjdk-r/ppa && \
+   DEBIAN_FRONTEND=noninteractive apt-get update && \
+   DEBIAN_FRONTEND=noninteractive apt-get -y install git ant wget software-properties-common unzip openjdk-8-jdk
+
+# Install Jetty for auth2
+RUN \
+   cd /usr/local && wget http://repo1.maven.org/maven2/org/eclipse/jetty/jetty-distribution/9.3.11.v20160721/jetty-distribution-9.3.11.v20160721.zip && \
+   unzip jetty*zip && \
+   rm jetty*zip 
 
 #mysystem("usermod www-data -G docker");
 
@@ -65,9 +80,9 @@ RUN cd /kb && \
      git clone --recursive https://github.com/kbase/kbapi_common && \
      git clone --recursive https://github.com/kbase/typecomp && \
      git clone --recursive https://github.com/kbase/jars && \
-     git clone --recursive https://github.com/kbase/auth -b develop && \
+     git clone --recursive https://github.com/kbase/auth -b $BRANCH && \
      git clone --recursive https://github.com/kbase/kbrest_common && \
-     git clone --recursive https://github.com/kbase/kb_sdk -b develop && \
+     git clone --recursive https://github.com/kbase/kb_sdk -b $BRANCH && \
      /tmp/githashes /kb/dev_container/modules > /tmp/tags && \
      rm -rf /kb/dev_container/modules/*/.git && \
      cd /kb/dev_container && \
@@ -82,24 +97,25 @@ RUN cd /kb && \
 ADD ./awe.fix /tmp/awe.fix
 
 RUN cd /kb/dev_container/modules && \
-     git clone --recursive https://github.com/kbase/handle_service -b develop && \
-     git clone --recursive https://github.com/kbase/narrative_method_store -b develop && \
-     git clone --recursive https://github.com/kbase/narrative_job_service -b develop && \
-     git clone --recursive https://github.com/kbase/handle_mngr -b develop && \
-     git clone --recursive https://github.com/kbase/njs_wrapper -b develop && \
-     git clone --recursive https://github.com/kbase/narrative_job_proxy -b develop && \
+     git clone --recursive https://github.com/kbase/handle_service -b $BRANCH && \
+     git clone --recursive https://github.com/kbase/narrative_method_store -b $BRANCH && \
+     git clone --recursive https://github.com/kbase/narrative_job_service -b $BRANCH && \
+     git clone --recursive https://github.com/kbase/handle_mngr -b $BRANCH && \
+     git clone --recursive https://github.com/kbase/njs_wrapper -b $BRANCH && \
+     git clone --recursive https://github.com/kbase/narrative_job_proxy -b $BRANCH && \
      git clone --recursive https://github.com/kbase/shock_service && \
      git clone --recursive https://github.com/kbase/auth_service && \
-     git clone --recursive https://github.com/kbase/workspace_deluxe -b develop && \
+#     git clone --recursive https://github.com/kbase/auth2 && \
+     git clone --recursive https://github.com/kbase/workspace_deluxe -b $BRANCH && \
      git clone --recursive https://github.com/kbase/awe_service && \
      (cd /kb/dev_container/modules/awe_service &&  cat /tmp/awe.fix|patch -p1) && \
-     git clone --recursive https://github.com/kbase/search && \
+     git clone --recursive https://github.com/kbase/search -b $BRANCH && \
      git clone --recursive https://github.com/kbase/java_type_generator && \
-     git clone --recursive https://github.com/kbase/user_profile -b develop && \
-     git clone --recursive https://github.com/kbase/user_and_job_state -b develop && \
-     git clone --recursive https://github.com/kbase/catalog -b develop && \
-     git clone --recursive https://github.com/kbaseincubator/service_wizard -b develop && \
-     git clone --recursive https://github.com/kbase/data_import_export -b dev && \
+     git clone --recursive https://github.com/kbase/user_profile -b $BRANCH && \
+     git clone --recursive https://github.com/kbase/user_and_job_state -b $BRANCH && \
+     git clone --recursive https://github.com/kbase/catalog -b $BRANCH && \
+     git clone --recursive https://github.com/kbaseincubator/service_wizard -b $BRANCH && \
+     git clone --recursive https://github.com/kbase/data_import_export -b $BRANCH && \
      git clone --recursive https://github.com/kbase/kbwf_common && \
      /tmp/githashes /kb/dev_container/modules >> /tmp/tags && \
      grep -lr kbase.us/services /kb/| grep -v docs/ | \
@@ -111,6 +127,15 @@ ADD autodeploy.cfg /kb/dev_container/autodeploy.cfg
 RUN cd /kb/dev_container && \
      . ./user-env.sh && PATH=/kb/deployment/bin:$PATH && make && \
      perl auto-deploy ./autodeploy.cfg
+# Build and deploy search (autodeploy isn't picking it up, too lazy to track down)
+RUN cd /kb/dev_container/modules/search && \
+     . /kb/dev_container/user-env.sh && \
+     make deploy && rm /kb/deployment/services/search/config/search_config.ini
+# build and deploy auth2 service (doesn't use autodeploy)
+# don't do this here now, use the auth2 Dockerfile
+#RUN cd /kb/dev_container/modules/auth2 && \
+#    export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64/ && \
+#    ant build
 
 # Checkout narrative and UI
 # Fixup kbase URL references

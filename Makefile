@@ -15,5 +15,6 @@ initialize:
 	docker run -it --rm --link mongo:mongo --link mysql:mysql $(IMAGE) initialize
 
 nginx:
+	date > build-nginx.trigger
 	docker build -t $(NGINX) -f Dockerfile.nginx .
 

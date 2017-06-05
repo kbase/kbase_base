@@ -31,5 +31,14 @@ $mcfg->setval('Paths','logs',$scfg->{'logs'});
 
 $mcfg->setval('Runtime','GOMAXPROCS',$scfg->{services}->{shock}->{'gomaxprocs'});
 
+# added kkeller 20dec2016 for auth2 testing
+$mcfg->setval('Auth','globus_token_url',$scfg->{'globus_token_url'}) if defined $scfg->{'globus_token_url'};
+$mcfg->setval('Auth','globus_profile_url',$scfg->{'globus_profile_url'}) if defined $scfg->{'globus_profile_url'};
+$mcfg->setval('External','api-url',$scfg->{'api-url'}) if defined $scfg->{'api-url'};
+#globus_token_url=https://nexus.api.globusonline.org/goauth/token?grant_type=client_credentials
+#globus_profile_url=https://nexus.api.globusonline.org/users
+#api-url=https://ci.kbase.us/auth2/shock-api
+
+
 $mcfg->WriteConfig($file);
 
