@@ -50,6 +50,9 @@ grep -lr public.hostname.org /kb/deployment/*bin/ /kb/deployment/lib/ /kb/deploy
 if [ "$1" = "rsync" ] ; then
   echo "rsync"
   rsync -avz /kb/deployment/services/kbase-ui /data/
+  echo 'touching files to force cache expiry'
+  find /data/kbase-ui -type f -exec touch {} \;
+  
 elif [ "$1" = "shell" ] ; then
   exec bash --login
 else

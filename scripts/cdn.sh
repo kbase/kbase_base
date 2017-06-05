@@ -2,8 +2,8 @@
 
 if [ "$1" = "rsync" ] ; then
   echo "rsync"
-  [ -e /data/files ] || mkdir /data/files
-  rsync -avz /kb/src/kbase-cdn-js/dist/bin/ /data/files/
+  [ -e /data/cdn/files ] || mkdir -p /data/cdn/files
+  rsync -avz /kb/src/kbase-cdn-js/dist/bin/ /data/cdn/files/
 elif [ "$1" = "shell" ] ; then
   exec bash --login
 else

@@ -52,7 +52,7 @@ RUN \
         git clone https://github.com/kbase/narrative -b $BRANCH && \
         /tmp/githashes /kb/src > /tmp/tags && \
         grep -lr kbase.us/services /kb/| grep -v docs/ | \
-          xargs sed -ri 's|https?://kbase.us/services|https://public.hostname.org:8443/services|g' && \
+        xargs sed -ri 's|https?://kbase.us/services|https://public.hostname.org:8443/services|g' && \
         rm -rf /kb/src/narrative/.git
 
 ADD ./scripts /kb/scripts
@@ -69,12 +69,14 @@ RUN \
         sed -i 's/user www-data;/user www-data docker;\ndaemon off;\nerror_log \/dev\/stdout info;/' /etc/nginx/nginx.conf && \
         mkdir -p /kb/deployment/services/narrative/docker && \
         cp -a /kb/src/narrative/docker/* /kb/deployment/services/narrative/docker/ && \
+        cp /kb/deployment/services/narrative/docker/proxy_mgr.lua /kb/deployment/services/narrative/docker/proxy_mgr2.lua  && \
         chmod a+rx /kb/scripts /kb/config /kb/scripts/*
 
-ADD lua/notelauncher.lua /kb/deployment/services/narrative/docker/
-ADD lua/proxy_mgr.lua /kb/deployment/services/narrative/docker/
-ADD lua/proxy_mgr.lua /kb/deployment/services/narrative/docker/proxy_mgr2.lua
-ADD lua/docker.lua /kb/deployment/services/narrative/docker/
+# These should now be up to date in the narrative repo
+#ADD lua/notelauncher.lua /kb/deployment/services/narrative/docker/
+#ADD lua/proxy_mgr.lua /kb/deployment/services/narrative/docker/
+#ADD lua/proxy_mgr.lua /kb/deployment/services/narrative/docker/proxy_mgr2.lua
+#ADD lua/docker.lua /kb/deployment/services/narrative/docker/
 
 WORKDIR /kb/
 

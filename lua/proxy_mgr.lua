@@ -766,13 +766,18 @@ end
 get_session = function()
     local hdrs = ngx.req.get_headers()
     local cheader = ngx.unescape_uri(hdrs['Cookie'])
+    if not cheader
+    then
+        cheader = ngx.unescape_uri(hdrs['Authorization'])
+    end
+    ngx.log( ngx.DEBUG, string.format("cookie = %s",cheader))
     local token = {}
     local session_id = nil; -- nil return value by default
     if cheader then
-        -- ngx.log( ngx.DEBUG, string.format("cookie = %s",cheader))
+        ngx.log( ngx.DEBUG, string.format("cookie = %s",cheader))
         local session = string.match(cheader, auth_cookie_name.."=([%S]+);?")
         if session then
-            -- ngx.log( ngx.DEBUG, string.format("kbase_session = %s",session))
+            ngx.log( ngx.DEBUG, string.format("kbase_session = %s",session))
             session = string.gsub(session, ";$", "")
             session = url_decode(session)
             for k, v in string.gmatch(session, "([%w_]+)=([^|]+);?") do
@@ -781,7 +786,7 @@ get_session = function()
             if token['token'] then
                 token['token'] = string.gsub(token['token'], "PIPESIGN", "|")
                 token['token'] = string.gsub(token['token'], "EQUALSSIGN", "=")
-                -- ngx.log( ngx.DEBUG, string.format("token[token] = %s",token['token']))
+                ngx.log( ngx.DEBUG, string.format("token[token] = %s",token['token']))
             end
         end
     end
@@ -802,7 +807,7 @@ get_session = function()
         local token_lock = locklib:new(M.lock_name)
         elapsed, err = token_lock:lock(token['kbase_sessionid'])
         if elapsed == nil then
-            ngx.log(ngx.ERR, "Error: failed to update token cache: "..err)
+            ngx.log(ngx.ERR, "Error: failed badly to update token cache: "..err)
             return nil
         end
         cached = token_cache:get(token['kbase_sessionid'])
@@ -1231,6 +1236,7 @@ M.set_proxy = set_proxy
 M.check_proxy = check_proxy
 M.use_proxy = use_proxy
 M.initialize = initialize
+M.get_session = get_session
 M.narrative_shutdown = narrative_shutdown
 
 return M

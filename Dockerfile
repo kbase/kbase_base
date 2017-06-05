@@ -44,8 +44,6 @@ RUN luarocks install luasocket;\
     luarocks install lua-spore;\
     luarocks install luacrypto
 
-#mysystem("usermod www-data -G docker");
-
 ENV TARGET /kb/deployment
 ENV PATH ${TARGET}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
@@ -96,13 +94,13 @@ RUN cd /kb/dev_container/modules && \
      git clone --recursive https://github.com/kbase/workspace_deluxe -b $BRANCH && \
      git clone --recursive https://github.com/kbase/awe_service && \
      (cd /kb/dev_container/modules/awe_service &&  cat /tmp/awe.fix|patch -p1) && \
-     git clone --recursive https://github.com/kbase/search && \
+     git clone --recursive https://github.com/kbase/search -b $BRANCH && \
      git clone --recursive https://github.com/kbase/java_type_generator && \
      git clone --recursive https://github.com/kbase/user_profile -b $BRANCH && \
      git clone --recursive https://github.com/kbase/user_and_job_state -b $BRANCH && \
      git clone --recursive https://github.com/kbase/catalog -b $BRANCH && \
-     git clone --recursive https://github.com/kbaseincubator/service_wizard -b $BRANCH && \
-     git clone --recursive https://github.com/kbase/data_import_export && \
+     git clone --recursive https://github.com/kbase/service_wizard -b master && \
+     git clone --recursive https://github.com/kbase/data_import_export -b master && \
      git clone --recursive https://github.com/kbase/kbwf_common && \
      /tmp/githashes /kb/dev_container/modules >> /tmp/tags && \
      grep -lr kbase.us/services /kb/| grep -v docs/ | \
@@ -114,6 +112,10 @@ ADD autodeploy.cfg /kb/dev_container/autodeploy.cfg
 RUN cd /kb/dev_container && \
      . ./user-env.sh && PATH=/kb/deployment/bin:$PATH && make && \
      perl auto-deploy ./autodeploy.cfg
+# Build and deploy search (autodeploy isn't picking it up, too lazy to track down)
+RUN cd /kb/dev_container/modules/search && \
+     . /kb/dev_container/user-env.sh && \
+     make deploy && rm /kb/deployment/services/search/config/search_config.ini
 
 # Checkout narrative and UI
 # Fixup kbase URL references
@@ -154,13 +156,13 @@ RUN \
     sed -i 's/server.err/server.err daemonize=false/' /kb/deployment/services/authorization_server/start_service
 
 # Hot fix for CallbackServer interface issue
-#RUN \
-#    cd /kb/dev_container/modules/njs_wrapper/ && \
-#    sed -i 's/en0/eth0/' ./src/us/kbase/common/executionengine/CallbackServer.java && \
-#    . /kb/dev_container/user-env.sh && \
-#    rm -rf /kb/deployment/services/njs_wrapper/webapps && \
-#    make && make deploy && \
-#    sed -i 's/>.*//' /kb/deployment/services/njs_wrapper/start_service
+RUN \
+    cd /kb/dev_container/modules/njs_wrapper/ && \
+    sed -i 's/en0/eth0/' ./src/us/kbase/common/executionengine/CallbackServer.java && \
+    . /kb/dev_container/user-env.sh && \
+    rm -rf /kb/deployment/services/njs_wrapper/webapps && \
+    make && make deploy && \
+    sed -i 's/>.*//' /kb/deployment/services/njs_wrapper/start_service
 
 ADD ./scripts /kb/scripts
 ADD ./config /kb/config
