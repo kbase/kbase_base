@@ -1,0 +1,274 @@
+# Dockerfile that builds the base KBase image
+#
+#Copyright (c) 2015 The KBase Project and its Contributors
+# United States Department of Energy
+# The DOE Systems Biology Knowledgebase (KBase)
+# Made available under the KBase Open Source License
+#
+FROM kbase/runtime:latest
+MAINTAINER Shane Canon scanon@lbl.gov
+
+ENV BRANCH develop
+ENV AWEBRANCH auth2
+
+# libsasl2-dev may be a new dep for shock
+# adding to here makes a big upgrade job, so add packages after if possible
+RUN \
+   apt-get update && \
+   DEBIAN_FRONTEND=noninteractive apt-get upgrade -y && \
+   DEBIAN_FRONTEND=noninteractive apt-get install -y \
+        python-pip libcurl4-gnutls-dev python-dev ncurses-dev software-properties-common libsasl2-dev
+
+
+# Split here just to manage the layer sizes
+RUN \
+   echo ''|add-apt-repository ppa:nginx/stable && \
+   apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv 7F0CEB10 && \
+   echo 'deb http://downloads-distro.mongodb.org/repo/ubuntu-upstart dist 10gen' \
+          > /etc/apt/sources.list.d/mongodb.list && \
+   curl -sL https://deb.nodesource.com/setup_4.x | bash && \
+   DEBIAN_FRONTEND=noninteractive apt-get install -y \
+     lua5.1 luarocks liblua5.1-0 liblua5.1-0-dev liblua5.1-json liblua5.1-lpeg2 \
+     nginx nginx-extras nodejs \
+     mongodb-10gen=2.4.14 apt-transport-https && \
+   npm install -g grunt-cli && \
+   apt-key adv --keyserver hkp://p80.pool.sks-keyservers.net:80 --recv-keys 58118E89F3A912897C070ADBF76221572C52609D && \
+   echo "deb https://apt.dockerproject.org/repo ubuntu-trusty main" >> /etc/apt/sources.list.d/docker.list && \
+   apt-get update && apt-get install -y docker-engine=1.7.1-0~trusty && \
+   pip install --upgrade sphinx && \
+   pip install docker-py gitpython pyyaml \
+       pyopenssl ndg-httpsclient pyasn1 && \
+   sed -i 's/not cert.get..subjectAltName., .../False/' /usr/local/lib/python2.7/dist-packages/requests/packages/urllib3/connection.py && \
+   cpanm -i Config::IniFiles
+
+# this complained when trying to build without cache about needing luasec
+# see https://itschr.is/installing-luasec-with-luarocks-on-ubuntu/
+RUN luarocks install luasec OPENSSL_LIBDIR=/usr/lib/x86_64-linux-gnu/
+
+RUN luarocks install luasocket;\
+    luarocks install luajson;\
+    luarocks install penlight;\
+    luarocks install lua-spore;\
+    luarocks install luacrypto
+
+# Add openjdk8 and ant for auth2
+RUN DEBIAN_FRONTEND=noninteractive add-apt-repository -y ppa:openjdk-r/ppa && \
+   DEBIAN_FRONTEND=noninteractive apt-get update && \
+   DEBIAN_FRONTEND=noninteractive apt-get -y install git ant wget software-properties-common unzip openjdk-8-jdk
+
+# Install Jetty for auth2
+RUN \
+   cd /usr/local && wget http://repo1.maven.org/maven2/org/eclipse/jetty/jetty-distribution/9.3.11.v20160721/jetty-distribution-9.3.11.v20160721.zip && \
+   unzip jetty*zip && \
+   rm jetty*zip 
+
+# update golang for latest version of shock
+# (the PPA is actually on 1.6; might want 1.8 from source instead)
+# added kkeller 21dec2016
+#RUN DEBIAN_FRONTEND=noninteractive add-apt-repository -y ppa:ubuntu-lxc/lxd-stable && \
+#   DEBIAN_FRONTEND=noninteractive apt-get update && \
+#   DEBIAN_FRONTEND=noninteractive apt-get install -y golang
+
+# the kbase/AWE:auth2 branch requires golang 1.5
+RUN \
+  cd /usr/local && \
+  wget https://storage.googleapis.com/golang/go1.5.4.linux-amd64.tar.gz && \
+  tar xzf go1.5.4.linux-amd64.tar.gz && \
+  ln -s /usr/local/go/bin/go /usr/local/bin/go
+
+ENV TARGET /kb/deployment
+ENV PATH ${TARGET}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+# Incremental package updates not yet in the run-time
+# May not be needed anymore
+RUN cpanm -i REST::Client && cpanm -i Time::ParseDate
+
+# Put the LetsEncrypt certs in the right places
+ADD  lets-encrypt-x3-cross-signed.der /tmp/lets.der
+RUN \
+        keytool -import -keystore /kb/runtime/glassfish3/glassfish/lib/templates/cacerts.jks -storepass changeit -noprompt -trustcacerts -alias letsencryptauthorityx3 -file /tmp/lets.der && \
+  cd && \
+  wget https://gist.githubusercontent.com/hedefalk/9442c224e7de4739e8cee6b7e88c4d7f/raw/af1f900abdd561da9ed3c41d0b3734ba8a72433b/install-letsencrypt-in-jdk.sh && \
+  chmod +x install-letsencrypt-in-jdk.sh && \
+  ./install-letsencrypt-in-jdk.sh $JAVA_HOME
+
+# Install rancher and some deps
+RUN \
+        apt-get install -y python-gevent && \
+        wget https://github.com/rancher/rancher-compose/releases/download/v0.8.5/rancher-compose-linux-amd64-v0.8.5.tar.gz && \
+        tar xzf rancher-compose-linux-amd64-v0.8.5.tar.gz  && \
+        mv ./rancher-compose-v0.8.5/rancher-compose  /usr/bin/ && \
+        pip install semantic_version && \
+        pip install gdapi-python
+
+# Bogus file to trigger a git clone and rebuild
+ADD build.trigger /tmp/
+ADD ./scripts/githashes /tmp/githashes
+RUN ( echo "Git clone";date) > /tmp/git.log
+
+# Clone the base repos
+RUN cd /kb && \
+     git clone https://github.com/kbase/dev_container && \
+     cd dev_container/modules && \
+     git clone --recursive https://github.com/kbase/kbapi_common && \
+     git clone --recursive https://github.com/kbase/typecomp && \
+     git clone --recursive https://github.com/kbase/jars && \
+     git clone --recursive https://github.com/kbase/auth -b $BRANCH && \
+     git clone --recursive https://github.com/kbase/kbrest_common && \
+# need to get kb_sdk PR 240 merged to switch back to kbase org
+# still in progress
+#     git clone --recursive https://github.com/kbase/kb_sdk -b $BRANCH && \
+     git clone --recursive https://github.com/kbase/kb_sdk -b auth2 && \
+     /tmp/githashes /kb/dev_container/modules > /tmp/tags && \
+     rm -rf /kb/dev_container/modules/*/.git && \
+     cd /kb/dev_container && \
+     grep -lr kbase.us/services /kb/| grep -v docs/ |\
+        xargs sed -ri 's|https?://kbase.us/services|https://public.hostname.org:8443/services|g' && \
+     ./bootstrap /kb/runtime && \
+     . ./user-env.sh && make && make deploy && \
+     rm -rf modules/kb_sdk
+
+# Checkout core kbase software
+#ADD ./awe.fix /tmp/awe.fix
+
+RUN cd /kb/dev_container/modules && \
+     git clone --recursive https://github.com/kbase/auth_service && \
+#     git clone --recursive https://github.com/kbase/auth2 && \
+# shock_service repo will be deprecated soon
+#     git clone --recursive https://github.com/kbase/shock_service -b auth2 && \
+     git clone --recursive https://github.com/kbase/workspace_deluxe -b $BRANCH && \
+     git clone --recursive https://github.com/kbase/handle_service -b $BRANCH && \
+     git clone --recursive https://github.com/kbase/handle_mngr -b $BRANCH && \
+     git clone --recursive https://github.com/kbase/narrative_method_store -b $BRANCH && \
+     git clone --recursive https://github.com/kbase/catalog -b $BRANCH && \
+     git clone --recursive https://github.com/kbase/service_wizard -b $BRANCH && \
+# awe_service is deprecated
+#     git clone --recursive https://github.com/kbase/awe_service -b $AWEBRANCH && \
+#     (cd /kb/dev_container/modules/awe_service &&  cat /tmp/awe.fix|patch -p1) && \
+     git clone --recursive https://github.com/kbase/njs_wrapper -b $BRANCH && \
+#     git clone --recursive https://github.com/kbase/narrative_job_service -b $BRANCH && \
+     git clone --recursive https://github.com/kbase/user_and_job_state -b $BRANCH && \
+     git clone --recursive https://github.com/kbase/user_profile -b $BRANCH && \
+#     git clone --recursive https://github.com/kbase/narrative_job_proxy -b $BRANCH && \
+# search is now a separate image
+#     git clone --recursive https://github.com/kbase/search -b $BRANCH && \
+     git clone --recursive https://github.com/kbase/java_type_generator && \
+     git clone --recursive https://github.com/kbase/data_import_export -b $BRANCH && \
+     git clone --recursive https://github.com/kbase/kbwf_common && \
+     /tmp/githashes /kb/dev_container/modules >> /tmp/tags && \
+     grep -lr kbase.us/services /kb/| grep -v docs/ | \
+        xargs sed -ri 's|https?://kbase.us/services|https://public.hostname.org:8443/services|g' && \
+     find /kb/dev_container/modules -iname ".git" | grep -v communities_api | grep -v m5nr | xargs rm -rf 
+
+### Build and deploy Shock from scratch
+# Not sure we need uuid and go-dockerclient but I don't think it can hurt
+# to do: get Shock commit tag and add to /tmp/tags
+# golib says "no buildable files" but seems ignorable
+RUN export GOPATH=/tmp/goroot && \
+    mkdir -p $GOPATH/src/github.com/MG-RAST  && \
+    go get github.com/pborman/uuid  && \
+    go get github.com/MG-RAST/golib  ; \
+    go get github.com/MG-RAST/go-dockerclient  && \
+    cd $GOPATH/src/github.com/MG-RAST  && \
+    git clone --recursive https://github.com/kbase/Shock -b auth2  && \
+    cp Shock/Makefile $GOPATH && cd $GOPATH && make version && \
+    cd $GOPATH/src/github.com/MG-RAST/Shock/shock-server  && \
+    go build  && \
+    cp shock-server /kb/deployment/bin/ && \
+    echo Shock server binary copied to /kb/deployment/bin
+
+### Build and deploy AWE from scratch
+# to do: get AWE commit tag and add to /tmp/tags
+# golib says "no buildable files" but seems ignorable
+RUN export GOPATH=/tmp/goroot && \
+    mkdir -p $GOPATH/src/github.com/MG-RAST  && \
+    go get github.com/pborman/uuid  && \
+    go get github.com/MG-RAST/golib  ; \
+    go get github.com/MG-RAST/go-dockerclient  && \
+    cd $GOPATH/src/github.com/MG-RAST  && \
+    git clone --recursive https://github.com/kbase/AWE -b auth2  && \
+    cd AWE/awe-server  && \
+    go build  && \
+    cp awe-server /kb/deployment/bin/  && \
+    cd ../awe-client  && \
+    go build  && \
+    cp awe-client /kb/deployment/bin/ && \
+    echo AWE server and client binaries copied to /kb/deployment/bin
+
+###
+
+# echo the git tags
+RUN cat /tmp/tags
+
+# Build and deploy kbase core software
+ADD autodeploy.cfg /kb/dev_container/autodeploy.cfg
+RUN cd /kb/dev_container && \
+     . ./user-env.sh && PATH=/kb/deployment/bin:$PATH && make && \
+     perl auto-deploy ./autodeploy.cfg
+
+# Build and deploy search (autodeploy isn't picking it up, too lazy to track down)
+# search is now its own image
+#RUN cd /kb/dev_container/modules/search && \
+#     . /kb/dev_container/user-env.sh && \
+#     make deploy && rm /kb/deployment/services/search/config/search_config.ini
+
+# build and deploy auth2 service (doesn't use autodeploy)
+RUN cd /kb/dev_container/modules/ && \
+# put the clone here so auth2 build can pick up the git hash (TASK-676)
+    git clone --recursive https://github.com/kbase/auth2 && \
+    cd /kb/dev_container/modules/auth2 && \
+    export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64/ && \
+    ant build
+
+# add auth2, Shock, and AWE hashes
+RUN \
+    /tmp/githashes /kb/dev_container/modules >> /tmp/tags && \
+    /tmp/githashes /tmp/goroot/src/github.com/MG-RAST/ >> /tmp/tags
+
+# Checkout narrative and UI
+# Fixup kbase URL references
+RUN \
+        cd /kb/dev_container/modules && \
+        grep -lr kbase.us/services /kb/| grep -v docs/ | \
+          xargs sed -ri 's|https?://kbase.us/services|https://public.hostname.org:8443/services|g'
+
+
+# Minor fixes
+
+# Make things run in the foreground and spit out logs -- hacky
+RUN \
+        sed -i 's/--daemonize [^ ]*log//' /kb/deployment/services/catalog/start_service && \
+#        sed -i 's/--daemonize [^ ]*log//' /kb/deployment/services/narrativejobproxy/start_service && \
+        sed -i 's/--daemonize [^ ]*log//' /kb/deployment/services/service_wizard/start_service && \
+        sed -i 's/--daemonize//' /kb/deployment/services/*/start_service && \
+        sed -i 's/--error-log [^ "]*//' /kb/deployment/services/*/start_service && \
+        sed -i 's/--pid [^ "]*//' /kb/deployment/services/*/start_service && \
+        sed -i 's/\/kb\/runtime\/sbin\/daemonize .*\/kb/\/kb/' /kb/deployment/services/*/start_service && \
+        sed -i 's/>.*//' /kb/deployment/services/njs_wrapper/start_service && \
+        sed -i 's/nohup //' /kb/deployment/services/*/start_service
+
+# General fixup
+RUN \
+    cd /kb/dev_container/modules/auth_service && . ../../user-env.sh && \
+    mv authorization_server/oauth.py authorization_server/koauth.py && \
+    sed -i 's/from oauth/from koauth/' authorization_server/authorization_server/urls.py  && \
+    sed -i 's/oauth/koauth/' authorization_server/authorization_server/settings.py  && \
+    sed -i 's/.\/start_service/echo done/' Makefile  && \
+    sed -i 's/from django.conf.urls.d/#from django.conf.urls.d/' authorization_server/authorization_server/urls.py  && \
+    make deploy-services && \
+    sed -i 's/server.err/server.err daemonize=false/' /kb/deployment/services/authorization_server/start_service
+
+ADD ./scripts /kb/scripts
+ADD ./config /kb/config
+# Additions
+# - link is for backwards compatibility
+#	cp /kb/config/nginx-full.cfg /etc/nginx/nginx.cfg && \
+
+WORKDIR /kb/
+
+RUN chmod a+rx /kb/scripts /kb/config /kb/scripts/*
+
+ENV USER root
+ENTRYPOINT [ "/kb/scripts/entrypoint.sh" ]
+CMD [ ]
+
